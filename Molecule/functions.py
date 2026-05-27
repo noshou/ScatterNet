@@ -5,6 +5,7 @@ from beartype import beartype
 from scipy.special import lpmv, spherical_jn
 from scipy.special import factorial as fact
 import numpy.typing as npt
+import FormFact
 
 @beartype
 def sphHarm(
@@ -51,7 +52,6 @@ def sphHarm(
     Y = N * P * azimuthal
     
     return Y
-
 
 @beartype 
 def bess (
