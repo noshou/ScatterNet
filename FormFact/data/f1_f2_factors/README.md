@@ -70,3 +70,44 @@ It is a nested dictionary with the following structure:
 		element_acronym : string : [f1 : float, f2 : float ]
 	}
 }
+
+---
+
+## Files in this directory
+
+- `<element>.tsv` — Raw Henke tables, one per element. Columns: `E_ev`, `f1_<elm>`, `f2_<elm>`.
+- `(12412.8)eV_f1_f2.json` — f1/f2 values at 12412.8 eV (1.0 Å) for all elements.
+  This is the file consumed by `F1F2Parser.ml` to generate `F1F2Factors.f90`.
+- `lookup_gen.R` — R script that joins all TSV files into a full energy-indexed JSON.
+
+---
+
+## Using lookup_gen.R
+
+Requires R with `tidyverse`, `stringr`, and `jsonlite`. Run from this directory:
+
+```bash
+Rscript lookup_gen.R
+```
+
+Reads every `.tsv` in the current directory, joins on `E_ev`, and writes `factor_lookup.json`.
+To update `(12412.8)eV_f1_f2.json` after adding a new element, extract the 12412.8 eV entry
+from the generated `factor_lookup.json`.
+
+---
+
+## Adding a New Element
+
+1. Add `<element>.tsv` with columns `E_ev`, `f1_<elm>`, `f2_<elm>`
+2. Run `Rscript lookup_gen.R` to regenerate `factor_lookup.json`
+3. Add the element's entry at 12412.8 eV to `(12412.8)eV_f1_f2.json`
+4. Rebuild: `cd build && make`
+
+---
+
+## Energy Normalization Note
+
+The Henke TSV tables use non-uniform, element-specific energy grids — not every element has
+a tabulated point at exactly 12412.8 eV. Where no exact match exists, the nearest available
+energy was used. The deviation is small (typically < 100 eV) and does not meaningfully affect
+the anomalous scattering corrections at this energy.

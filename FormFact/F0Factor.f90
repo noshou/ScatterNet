@@ -23,12 +23,13 @@ module F0Factor
     !---------------------------------------------------------------------------
 
     !> Number of elements in lookup table
-    integer, parameter :: nElements = 25
+    integer, parameter :: nElements = 26
     !> Number of Q values in lookup table
     integer, parameter :: nQValues = 26
 
     !> Element/ion symbols (lowercase)
-    character(len=4), parameter :: elements(25) = [ &
+    character(len=4), parameter :: elements(26) = [ &
+            'zn2+', &
             'ni  ', &
             'mg2+', &
             'se  ', &
@@ -88,7 +89,8 @@ module F0Factor
     !> Form factor data: f0(Q) for each element
     !! Rows: Q values, Columns: Elements
     !! f0 decreases with increasing Q due to destructive interference
-    real(c_double), parameter :: f0Data(26,25) = reshape([ &
+    real(c_double), parameter :: f0Data(26,26) = reshape([ &
+            28.000000_c_double, &
             28.000000_c_double, &
             10.000000_c_double, &
             34.000000_c_double, &
@@ -114,6 +116,7 @@ module F0Factor
             3.000000_c_double, &
             2.000000_c_double, &
             1.000000_c_double, &
+            27.975700_c_double, &
             27.892000_c_double, &
             9.986000_c_double, &
             33.881000_c_double, &
@@ -139,6 +142,7 @@ module F0Factor
             2.947000_c_double, &
             1.993000_c_double, &
             0.991000_c_double, &
+            27.828000_c_double, &
             27.579000_c_double, &
             9.945000_c_double, &
             33.532000_c_double, &
@@ -164,6 +168,7 @@ module F0Factor
             2.802000_c_double, &
             1.972000_c_double, &
             0.966000_c_double, &
+            27.615000_c_double, &
             27.096000_c_double, &
             9.876000_c_double, &
             32.982000_c_double, &
@@ -189,6 +194,7 @@ module F0Factor
             2.606000_c_double, &
             1.939000_c_double, &
             0.925000_c_double, &
+            27.323000_c_double, &
             26.490000_c_double, &
             9.782000_c_double, &
             32.273000_c_double, &
@@ -214,6 +220,7 @@ module F0Factor
             2.400000_c_double, &
             1.893000_c_double, &
             0.872000_c_double, &
+            26.958000_c_double, &
             25.807000_c_double, &
             9.662000_c_double, &
             31.449000_c_double, &
@@ -239,6 +246,7 @@ module F0Factor
             2.215000_c_double, &
             1.837000_c_double, &
             0.811000_c_double, &
+            26.525000_c_double, &
             25.083000_c_double, &
             9.519000_c_double, &
             30.557000_c_double, &
@@ -264,6 +272,7 @@ module F0Factor
             2.065000_c_double, &
             1.774000_c_double, &
             0.744000_c_double, &
+            25.032000_c_double, &
             24.344000_c_double, &
             9.335000_c_double, &
             29.637000_c_double, &
@@ -289,6 +298,7 @@ module F0Factor
             1.950000_c_double, &
             1.701000_c_double, &
             0.676000_c_double, &
+            25.488000_c_double, &
             23.604000_c_double, &
             9.171000_c_double, &
             28.718000_c_double, &
@@ -314,6 +324,7 @@ module F0Factor
             1.863000_c_double, &
             1.624000_c_double, &
             0.608000_c_double, &
+            24.899000_c_double, &
             22.872000_c_double, &
             8.969000_c_double, &
             27.822000_c_double, &
@@ -339,6 +350,7 @@ module F0Factor
             1.796000_c_double, &
             1.543000_c_double, &
             0.542000_c_double, &
+            24.275000_c_double, &
             22.150000_c_double, &
             8.751000_c_double, &
             26.962000_c_double, &
@@ -364,6 +376,7 @@ module F0Factor
             1.742000_c_double, &
             1.460000_c_double, &
             0.481000_c_double, &
+            23.622000_c_double, &
             21.438000_c_double, &
             8.521000_c_double, &
             26.145000_c_double, &
@@ -389,6 +402,7 @@ module F0Factor
             1.693000_c_double, &
             1.377000_c_double, &
             0.424000_c_double, &
+            22.949000_c_double, &
             20.737000_c_double, &
             8.280000_c_double, &
             25.372000_c_double, &
@@ -414,6 +428,7 @@ module F0Factor
             1.648000_c_double, &
             1.295000_c_double, &
             0.373000_c_double, &
+            22.261000_c_double, &
             20.046000_c_double, &
             8.030000_c_double, &
             24.641000_c_double, &
@@ -439,6 +454,7 @@ module F0Factor
             1.604000_c_double, &
             1.214000_c_double, &
             0.328000_c_double, &
+            21.566000_c_double, &
             19.365000_c_double, &
             7.774000_c_double, &
             23.947000_c_double, &
@@ -464,6 +480,7 @@ module F0Factor
             1.559000_c_double, &
             1.136000_c_double, &
             0.287000_c_double, &
+            20.869000_c_double, &
             18.696000_c_double, &
             7.513000_c_double, &
             23.288000_c_double, &
@@ -489,6 +506,7 @@ module F0Factor
             1.513000_c_double, &
             1.060000_c_double, &
             0.251000_c_double, &
+            20.175000_c_double, &
             18.040000_c_double, &
             7.251000_c_double, &
             22.656000_c_double, &
@@ -514,6 +532,7 @@ module F0Factor
             1.465000_c_double, &
             0.988000_c_double, &
             0.220000_c_double, &
+            19.488000_c_double, &
             17.398000_c_double, &
             6.987000_c_double, &
             22.048000_c_double, &
@@ -539,6 +558,7 @@ module F0Factor
             1.417000_c_double, &
             0.920000_c_double, &
             0.193000_c_double, &
+            18.812000_c_double, &
             16.773000_c_double, &
             6.725000_c_double, &
             21.459000_c_double, &
@@ -564,6 +584,7 @@ module F0Factor
             1.369000_c_double, &
             0.856000_c_double, &
             0.169000_c_double, &
+            18.150000_c_double, &
             16.165000_c_double, &
             6.465000_c_double, &
             20.887000_c_double, &
@@ -589,6 +610,7 @@ module F0Factor
             1.320000_c_double, &
             0.795000_c_double, &
             0.148000_c_double, &
+            17.504000_c_double, &
             15.576000_c_double, &
             6.210000_c_double, &
             20.328000_c_double, &
@@ -614,6 +636,7 @@ module F0Factor
             1.270000_c_double, &
             0.738000_c_double, &
             0.130000_c_double, &
+            16.876000_c_double, &
             15.008000_c_double, &
             5.959000_c_double, &
             19.780000_c_double, &
@@ -639,6 +662,7 @@ module F0Factor
             1.221000_c_double, &
             0.686000_c_double, &
             0.115000_c_double, &
+            16.269000_c_double, &
             14.461000_c_double, &
             5.715000_c_double, &
             19.242000_c_double, &
@@ -664,6 +688,7 @@ module F0Factor
             1.173000_c_double, &
             0.636000_c_double, &
             0.101000_c_double, &
+            15.683000_c_double, &
             13.937000_c_double, &
             5.477000_c_double, &
             18.713000_c_double, &
@@ -689,6 +714,7 @@ module F0Factor
             1.125000_c_double, &
             0.591000_c_double, &
             0.090000_c_double, &
+            15.120000_c_double, &
             13.435000_c_double, &
             5.247000_c_double, &
             18.193000_c_double, &
@@ -714,6 +740,7 @@ module F0Factor
             1.078000_c_double, &
             0.548000_c_double, &
             0.079000_c_double, &
+            14.580000_c_double, &
             12.956000_c_double, &
             5.025000_c_double, &
             17.682000_c_double, &
@@ -739,7 +766,7 @@ module F0Factor
             1.033000_c_double, &
             0.509000_c_double, &
             0.071000_c_double &
-    ], shape=[26,25], order=[2,1])
+    ], shape=[26,26], order=[2,1])
 
 contains
 
@@ -777,8 +804,8 @@ contains
             ! Convert element to lower case
             elementLower = toLower(element)
 
-            ! Round q to nearest 0.01 Å⁻¹
-            qRound = ceiling(q * 100.0_c_double) / 100.0_c_double
+            ! Round q to nearest 0.02 Å⁻¹ grid point
+            qRound = nint(q * 50.0_c_double) / 50.0_c_double
 
             ! Find element index
             elemIdx = -1
@@ -820,6 +847,6 @@ contains
     !! @return qVals List of available q values
     function getQVals() result(qVals)
             real(c_double), allocatable :: qVals(:)
-            qVals = qValues
+            allocate(qVals, source=qValues)
     end function getQVals
 end module F0Factor

@@ -164,8 +164,8 @@ let f0_toFortran csv_fp =
 	Printf.fprintf oc "            character(len=10) :: elementLower\n\n";
 	Printf.fprintf oc "            ! Convert element to lower case\n";
 	Printf.fprintf oc "            elementLower = toLower(element)\n\n";
-	Printf.fprintf oc "            ! Round q to nearest 0.01 Å⁻¹\n";
-	Printf.fprintf oc "            qRound = ceiling(q * 100_c_double) / 100_c_double\n\n";
+	Printf.fprintf oc "            ! Round q to nearest 0.02 Å⁻¹ grid point\n";
+	Printf.fprintf oc "            qRound = nint(q * 50.0_c_double) / 50.0_c_double\n\n";
 	Printf.fprintf oc "            ! Find element index\n";
 	Printf.fprintf oc "            elemIdx = -1\n";
 	Printf.fprintf oc "            do i = 1, nElements\n";
