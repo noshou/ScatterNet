@@ -1,23 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
-"""
-Encoding script.
-
-Reads every molecule from the HDF5, encodes its ion strings into xraydb VOCAB
-indices, and writes the results to a SQLite database used for size-bucketed
-batching during training.
-
-SQLite schema (items):
-    stem      — molecule filename without .xyz extension
-    grp       — HDF5 source group (e.g. "COD", "QM9")
-    atoms     — atom count, used for WHERE atoms BETWEEN x AND y queries
-    VOCAB_idx — JSON list of xraydb integer indices, one per atom
-
- Usage:
-    from Preprocess import encode
-    encode("my_dataset", "I(q)@L=50.h5")
-    # writes my_dataset-ENCODING.sqlite3
-"""
 import re
 import json
 import sqlite3
@@ -29,17 +11,25 @@ from .vocab import VOCAB
 import os
 
 class Encoding:
-    """Singleton that builds and queries the molecule encoding database.
+    
+    """
+    Singleton that builds and queries the molecule encoding database.
 
     On first construction, reads every molecule from an HDF5 file, maps each
     atom's element string to an integer VOCAB index, and persists the results
     to a SQLite database.  Subsequent constructions with the same ``db_name``
     reuse the existing file without re-parsing.
 
-    The database is the primary input to ``BatchEncode``: call
+    The database is the primary input to ``Batcher``: call
     ``get_in_range(min, max)`` to retrieve all molecules whose atom count falls
-    in a size bucket, then let ``BatchEncode`` accumulate rows until the total
+    in a size bucket, then let ``Batcher`` accumulate rows until the total
     atom count would exceed ``atom_size_ceil`` and split there.
+    
+    Usage:
+    ``` from Preprocess import encode
+        encode("my_dataset", "I(q)@L=50.h5")
+        # writes my_dataset-ENCODING.sqlite3
+    ```
     """
 
     _CHARGE_RE = re.compile(r'[0-9]*[+\-]+$')
@@ -57,7 +47,8 @@ class Encoding:
 
     _CHUNK = 10_000
     _path: str
-
+    _max:  int
+    
     _initialized = False
     _instance = None
 
@@ -80,6 +71,7 @@ class Encoding:
         if os.path.exists(_DBPATH):
             print(f"Found existing database: '{_DBPATH}'. Skipping HDF5 parsing loop.")
             self._path = _DBPATH
+            self._max  = self.max_atom_count()
             self._initialized = True
             return
 
@@ -122,6 +114,9 @@ class Encoding:
 
             conn.commit()
         finally:
+            cursor.execute("SELECT MAX(atoms) FROM items")
+            max_ = cursor.fetchone()
+            self._max = max_[0] if max_[0] is not None else 0
             conn.close()
 
         self._path = _DBPATH
@@ -193,5 +188,6 @@ class Encoding:
             conn.close()
         return results
 
-
-        
+    def max_atom_count(self) -> int:
+        """Return the largest atom count across all molecules in the database."""
+        return self._max
