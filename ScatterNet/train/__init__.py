@@ -1,3 +1,3 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
-from .loss import log_mse
+from .loss import Loss
