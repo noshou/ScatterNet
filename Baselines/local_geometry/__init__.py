@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
-from Baselines.local_geometry.pr_baseline import PairPeakBaseline
-from Baselines.local_geometry.nn_baseline import NNBaseline
+from .nn_baseline import NNBaseline
+from .pr_baseline import PairPeakBaseline
 
-__all__ = ["PairPeakBaseline", "NNBaseline"]
+__all__ = ["NNBaseline", "PairPeakBaseline"]

@@ -2,7 +2,6 @@
 
 import torch
 
-from typing          import Iterable
 from jaxtyping       import Float, jaxtyped
 from beartype        import beartype
 from ScatterNet.batching import Batch
