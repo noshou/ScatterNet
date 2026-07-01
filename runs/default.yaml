@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
-# paths — override these for Kaggle (see kaggle_train.py for an example)
+# paths - override these for Kaggle (see kaggle_train.py for an example)
 hdf5:        Preprocess/I(q)@L=50.h5
 db:          Preprocess/scatternet
 ckpt_best:   scatternet_best.pt
