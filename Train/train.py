@@ -217,6 +217,7 @@ def _parse_args():
     p.add_argument("--atm_chunk",      type=int,   default=None)
     p.add_argument("--mol_chunk",      type=int,   default=None)
     p.add_argument("--dp_atom_threshold", type=int, default=None)
+    p.add_argument("--compile",        action="store_const", const=True, default=None)
     p.add_argument("--eps_embd",       type=float, default=None)
     p.add_argument("--eps_msgp",       type=float, default=None)
 
@@ -423,6 +424,7 @@ def _worker(rank: int, cfg: RunConfig):
         eps_embd  = cfg.eps_embd,
         eps_msgp  = cfg.eps_msgp,
         dp_atom_threshold = cfg.dp_atom_threshold,
+        compile   = cfg.compile,
     ).to(device)
 
     criterion = Loss(q_grid, energy).to(device)
@@ -764,6 +766,7 @@ def main(cfg: RunConfig | None = None):
             atm_chunk      = A.atm_chunk,
             mol_chunk      = A.mol_chunk,
             dp_atom_threshold = A.dp_atom_threshold,
+            compile        = A.compile,
             eps_embd       = A.eps_embd,
             eps_msgp       = A.eps_msgp,
             lambda_6       = A.lambda_6,
