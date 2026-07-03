@@ -7,7 +7,6 @@ from beartype            import beartype
 from ScatterNet.batching import Batch
 from Baselines.baseline  import Baseline, build_fmag_table
 
-
 class NNBaseline(Baseline):
     """
     Local-geometry baseline: I(q) ≈ I(0)·sinc(q·r_nn) where r_nn is the mean

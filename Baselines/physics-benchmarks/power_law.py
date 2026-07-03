@@ -7,7 +7,6 @@ from beartype            import beartype
 from ScatterNet.batching import Batch
 from Baselines.baseline  import Baseline, build_fmag_table
 
-
 class PairPeakBaseline(Baseline):
     """
     Local-geometry baseline: I(q) ≈ I(0)·sinc(q·r*) where r* is the P(r) histogram peak.
