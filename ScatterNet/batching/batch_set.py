@@ -1,11 +1,12 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 import torch
-from torch.utils.data import Dataset
-from .batch import Batch
-from beartype.typing import List
 import h5py
-from Preprocess import Encoding
+
+from torch.utils.data import Dataset
+from .batch           import Batch
+from beartype.typing  import List
+from Preprocess       import Encoding
 
 class BatchSet(Dataset):
     """A PyTorch Dataset where each item is a pre-built batch of molecules.

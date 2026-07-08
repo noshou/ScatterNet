@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
-import numpy as np
-from beartype import beartype
+import numpy        as np
 import numpy.typing as npt
+
+from beartype   import beartype
 from .stuhrmann import StuhrmannMixin
 
 @beartype
