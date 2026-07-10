@@ -6,7 +6,6 @@ from typing      import Optional
 
 import yaml
 
-
 # Default size buckets: each tuple is (min_atoms, max_atoms) for one batch group.
 DEFAULT_BUCKETS: list[tuple[int, int]] = [
     (    1,    3),

@@ -67,7 +67,6 @@ def build_fmag_table(
 
     return table
 
-
 class Baseline(ABC):
     """Abstract base class for all baseline scattering-curve predictors.
 
