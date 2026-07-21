@@ -1,17 +1,17 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
-import torch
+from dataclasses import dataclass
 
-from jaxtyping          import Bool, Float, Int, jaxtyped
-from beartype           import beartype
-from beartype.typing    import List
-from dataclasses        import dataclass
+import torch
+from beartype import beartype
+from beartype.typing import List
+from jaxtyping import Bool, Float, Int, jaxtyped
 from torch.nn.utils.rnn import pad_sequence
+
 
 @jaxtyped(typechecker=beartype)
 @dataclass(frozen=True)
 class Batch:
-
     """Batch of molecules.
 
     All tensors are zero-padded to the longest molecule in the batch (M atoms).
@@ -28,11 +28,17 @@ class Batch:
         Centroid-subtracted Cartesian coordinates per atom, shape (N, M, 3).
     """
 
-    vocab: Int[torch.Tensor,   "N M"]    # N molecules, M max atoms (padded)
-    iqval: Float[torch.Tensor, "N Q"]    # N molecules, Q q-points
-    coord: Float[torch.Tensor, "N M 3"]  # Cartesian coordinates
+    # N molecules, M max atoms (padded)
+    vocab: Int[torch.Tensor, "N M"]  # noqa: F722
+
+    # N molecules, Q q-points
+    iqval: Float[torch.Tensor, "N Q"]  # noqa: F722
+
+    # Cartesian coordinates
+    coord: Float[torch.Tensor, "N M 3"] # noqa: F722
+
     @jaxtyped(typechecker=beartype)
-    def padding_mask(self) -> Bool[torch.Tensor, "N M"]:
+    def padding_mask(self) -> Bool[torch.Tensor, "N M"]: # noqa: F722
         """Compute the boolean mask distinguishing real atoms from padding.
 
         Returns
@@ -47,8 +53,9 @@ class Batch:
     def to(self, device: torch.device) -> "Batch":
         """Return a copy of this Batch with all tensors moved to ``device``.
 
-        A no-op-cost move when the tensors are already on ``device`` (``Tensor.to``
-        returns the same object). Used to run a whole batch on GPU without
+        A no-op-cost move when the tensors are already on ``device``
+        (``Tensor.to`` returns the same object).
+        Used to run a whole batch on GPU without
         mutating this frozen instance.
 
         Parameters
@@ -70,11 +77,10 @@ class Batch:
     @classmethod
     def from_lists(
         cls,
-        vocabs: List[Int[torch.Tensor,   "M"]],
-        iqvals: List[Float[torch.Tensor, "Q"]],
-        coords: List[Float[torch.Tensor, "M 3"]]
+        vocabs: List[Int[torch.Tensor, "M"]],     # noqa: F821, F722
+        iqvals: List[Float[torch.Tensor, "Q"]],   # noqa: F821
+        coords: List[Float[torch.Tensor, "M 3"]], # noqa: F722
     ) -> "Batch":
-
         """Pad variable-length per-molecule tensors and construct a Batch.
 
         Forces all tensors to the exact same shape. Since vocabs are the
@@ -98,6 +104,10 @@ class Batch:
         """
         return cls(
             vocab=pad_sequence(vocabs, batch_first=True, padding_value=0),
-            iqval=pad_sequence(iqvals, batch_first=True, padding_value=0).to(torch.float32),
-            coord=pad_sequence(coords, batch_first=True, padding_value=0).to(torch.float32)
+            iqval=pad_sequence(iqvals, batch_first=True, padding_value=0).to(
+                torch.float32
+            ),
+            coord=pad_sequence(coords, batch_first=True, padding_value=0).to(
+                torch.float32
+            ),
         )
