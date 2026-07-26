@@ -1024,6 +1024,7 @@ def _worker(rank: int, cfg: RunConfig):
                 f"batch_idx {saved_bi}, best_val {best_val:.4f}, "
                 f"lr {resumed_lr:.4g})",
             )
+        del ckpt
 
     # profiler - diagnostic mode. Two decoupled layers, both on every rank:
     #
