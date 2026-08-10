@@ -12,9 +12,8 @@ from torch import nn
 from Preprocess import VOCAB
 
 from ..batching import Batch
-from ..utils.no_trilin_bilin import NoTrilinBilin
+from ..layers.no_trilin_bilin import NoTrilinBilin
 from ..utils.sigma_window import arctan_log_sigma_window
-from .layer_head import LayerHead
 
 # Multiplier on `_f0f1`/`_f2`'s default weight init when a physical
 # `f_init` bias is supplied. See `Embed`'s "Form-factor init" docstring
@@ -334,7 +333,9 @@ class Embed(nn.Module):
         return embeds, f_mags, sigmas
 
     @jaxtyped(typechecker=beartype)
-    def forward(self, batch: Batch, eps: float) -> LayerHead:
+    def forward(
+        self, batch: Batch, eps: float
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Embed a batch's atoms and estimate their scattering properties.
 
         Parameters
@@ -346,12 +347,15 @@ class Embed(nn.Module):
 
         Returns
         -------
-        LayerHead
-            Container with `embeds` (N, M, 1, λ₁), `f_mags` (N, M, Q, 1),
-            and `sigmas` (N, M, Q, 1).
+        torch.Tensor
+            `embeds`, shape (N, M, 1, λ₁).
+        torch.Tensor
+            `f_mags`, shape (N, M, Q, 1).
+        torch.Tensor
+            `sigmas`, shape (N, M, Q, 1).
         """
 
-        embeds, f_mags, sigmas = self._fwd_fn(
+        return self._fwd_fn(
             self._prelu,
             self._mbd,
             self._f0f1,
@@ -364,5 +368,3 @@ class Embed(nn.Module):
             batch.padding_mask(),
             eps,
         )
-
-        return LayerHead(embeds=embeds, f_mags=f_mags, sigmas=sigmas)
