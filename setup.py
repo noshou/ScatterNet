@@ -31,6 +31,8 @@ setup(
         "h5py",
         "hdf5plugin",
         "xraydb",
+        "beartype",
+        "jaxtyping",
         "pyyaml",
     ],
     entry_points={

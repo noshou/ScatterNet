@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 import bisect
-from typing import List, Tuple
 
 import h5py
 import numpy as np
+from beartype.typing import List, Tuple
 from numpy.random import default_rng
 
 from Preprocess import Encoding
