@@ -1,12 +1,9 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 import math
-from typing import Callable
+from typing import Callable, Tuple
 
 import torch
-from beartype import beartype
-from beartype.typing import Tuple
-from jaxtyping import jaxtyped
 from pyteals import NoTrilinBilin
 from torch import nn
 
@@ -232,7 +229,7 @@ class Embed(nn.Module):
         )
 
     @staticmethod
-    def __forward_fn( # can't use jaxtyping/beartype due to torch.compile
+    def __forward_fn(
         prelu: nn.PReLU,
         mbd: nn.Embedding,
         f0f1: nn.Linear,
@@ -334,7 +331,6 @@ class Embed(nn.Module):
 
         return embeds, f_mags, sigmas
 
-    @jaxtyped(typechecker=beartype)
     def forward(
         self, batch: Batch, eps: float
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:

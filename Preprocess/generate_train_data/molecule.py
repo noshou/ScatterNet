@@ -2,12 +2,10 @@
 
 import numpy as np
 import numpy.typing as npt
-from beartype import beartype
 
 from .stuhrmann import StuhrmannMixin
 
 
-@beartype
 class Molecule(StuhrmannMixin):
     """
     Immutable representation of a molecule.

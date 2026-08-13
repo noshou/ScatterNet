@@ -3,8 +3,6 @@
 from collections.abc import Iterable
 
 import torch
-from beartype import beartype
-from jaxtyping import Float, jaxtyped
 
 from Baselines.run.baseline import Baseline
 from ScatterNet.batching import Batch
@@ -24,7 +22,6 @@ class AtomCountBaseline(Baseline):
     def __init__(self) -> None:
         self._mean_by_count = None
 
-    @jaxtyped(typechecker=beartype)
     def fit(self, loader: Iterable[Batch]) -> "AtomCountBaseline":
         """Accumulate per-atom-count mean I(q) from the training loader."""
         sums: dict[int, torch.Tensor] = {}
@@ -46,8 +43,7 @@ class AtomCountBaseline(Baseline):
         self._mean_by_count = {c: sums[c] / counts[c] for c in sums}
         return self
 
-    @jaxtyped(typechecker=beartype)
-    def __call__(self, batch: Batch) -> Float[torch.Tensor, "N Q"]:  # noqa: F722
+    def __call__(self, batch: Batch) -> torch.Tensor:  # shape (N, Q)
         """Return the mean I(q) for the nearest bucket per molecule."""
         if self._mean_by_count is None:
             raise RuntimeError("AtomCountBaseline must be fit before calling")
