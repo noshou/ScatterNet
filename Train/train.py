@@ -39,7 +39,6 @@ def _first(x: list):
     """
     return x[0]
 
-
 def _rclone_push(path: str, dest: str | None, delete_after: bool = False):
     """Copy a file or directory to a durable rclone remote so it survives a
     session timeout.
@@ -90,7 +89,6 @@ def _rclone_push(path: str, dest: str | None, delete_after: bool = False):
         except OSError as e:
             print(f"  [rclone] local cleanup of {path} failed: {e}")
 
-
 def _destroy_vast_instance() -> None:
     """Destroy this vast.ai instance once training has fully converged.
 
@@ -126,7 +124,6 @@ def _destroy_vast_instance() -> None:
         )
     except Exception as e:
         print(f"  [auto-kill] destroy of instance {container_id} failed: {e}")
-
 
 # profiler
 class _LoopProfiler:
@@ -395,7 +392,6 @@ class _LoopProfiler:
 
         print("\n".join(lines))
 
-
 # CLI
 def _parse_args():
     """Parse CLI arguments.
@@ -437,6 +433,7 @@ def _parse_args():
     # loss
     p.add_argument("--lambda_6", type=float, default=None)
     p.add_argument("--lambda_7", type=float, default=None)
+    p.add_argument("--lambda_8", type=float, default=None)
 
     # training
     p.add_argument("--lr", type=float, default=None)
@@ -480,7 +477,6 @@ def _parse_args():
 
     return p.parse_args()
 
-
 # eval helper
 def evaluate(
     loader: torch.utils.data.DataLoader,
@@ -502,7 +498,7 @@ def evaluate(
     model : ScatterNet
         Model to evaluate; called in `eval()` mode.
     cfg : RunConfig
-        Run configuration, used for `lambda_6`/`lambda_7`.
+        Run configuration, used for `lambda_6`/`lambda_7`/`lambda_8`.
     device : str
         Torch device to move batch tensors to.
     label : str
@@ -576,6 +572,7 @@ def evaluate(
                     batch,
                     cfg.lambda_6,
                     cfg.lambda_7,
+                    cfg.lambda_8,
                 )
             iq = iq.float()  # R2/metrics accumulate in fp32
             n = batch.iqval.shape[0]
@@ -648,7 +645,6 @@ def evaluate(
     pct_err = pct_err_sum / pct_err_n if pct_err_n > 0 else float("nan")
     return mean_loss, r2, pct_err
 
-
 # training worker
 def _worker(cfg: RunConfig):
     """Run the training worker, in-process on the single available GPU.
@@ -677,7 +673,8 @@ def _worker(cfg: RunConfig):
     print(
         f"lr={cfg.lr}  epochs={cfg.epochs}  λ1={cfg.lambda_1}  "
         f"λ2={cfg.lambda_2}  λ3={cfg.lambda_3}  λ4={cfg.lambda_4}  "
-        f"λ5={cfg.lambda_5}  λ6={cfg.lambda_6}  λ7={cfg.lambda_7}"
+        f"λ5={cfg.lambda_5}  λ6={cfg.lambda_6}  λ7={cfg.lambda_7}  "
+        f"λ8={cfg.lambda_8}"
     )
 
     # data
@@ -1523,6 +1520,7 @@ def _worker(cfg: RunConfig):
                         batch,
                         cfg.lambda_6,
                         cfg.lambda_7,
+                        cfg.lambda_8,
                     )
 
             if cfg.verbosity == "diagnostic":
@@ -1824,6 +1822,7 @@ def _worker(cfg: RunConfig):
                 compute_loss=True,
                 lambda_6=cfg.lambda_6,
                 lambda_7=cfg.lambda_7,
+                lambda_8=cfg.lambda_8,
                 verbose=cfg.verbosity in ("batch", "diagnostic"),
                 start_batch=test_start,
                 resume_state=test_state,
@@ -2023,7 +2022,6 @@ def _worker(cfg: RunConfig):
     if fully_converged:
         _destroy_vast_instance()
 
-
 # entry point
 def main(cfg: RunConfig | None = None):
     """Entry point for training.
@@ -2064,6 +2062,7 @@ def main(cfg: RunConfig | None = None):
             eps_msgp=A.eps_msgp,
             lambda_6=A.lambda_6,
             lambda_7=A.lambda_7,
+            lambda_8=A.lambda_8,
             lr=A.lr,
             lr_factor=A.lr_factor,
             lr_patience=A.lr_patience,
