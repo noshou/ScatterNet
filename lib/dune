@@ -1,0 +1,3 @@
+(library
+    (name scatternet)
+    (libraries gsl lacaml sqlite3 pyml owl-base))

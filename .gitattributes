@@ -1,0 +1,16 @@
+# dune build files -- no extension, so linguist won't classify these
+# without an explicit override.
+dune linguist-language=Dune
+dune-project linguist-language=Dune
+
+# OCaml sources. .mll is ocamllex specifically (lexer specifications
+# compiled to .ml by dune's `ocamllex` stanza), tagged as its own
+# language rather than left to fall back to plain OCaml/text detection.
+*.ml  diff=ocaml linguist-language=OCaml
+*.mli diff=ocaml linguist-language=OCaml
+*.mll diff=ocaml linguist-language=OCaml-lex linguist-detectable=true
+
+# sqlite3 databases -- binary blobs, never diff/merge as text.
+*.db      binary
+*.sqlite  binary
+*.sqlite3 binary
