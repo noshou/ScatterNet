@@ -3,12 +3,11 @@
 dune linguist-language=Dune
 dune-project linguist-language=Dune
 
-# OCaml sources. .mll is ocamllex specifically (lexer specifications
-# compiled to .ml by dune's `ocamllex` stanza), tagged as its own
-# language rather than left to fall back to plain OCaml/text detection.
+# OCaml sources, including .mll (ocamllex) -- Linguist's own languages.yml
+# classifies .mll under OCaml itself, there's no separate "OCaml-lex" entry.
 *.ml  diff=ocaml linguist-language=OCaml
 *.mli diff=ocaml linguist-language=OCaml
-*.mll diff=ocaml linguist-language=OCaml-lex linguist-detectable=true
+*.mll diff=ocaml linguist-language=OCaml
 
 # sqlite3 databases -- binary blobs, never diff/merge as text.
 *.db      binary

@@ -1,4 +1,5 @@
 open Gsl
+open Printf
 
 exception SphHarm_InvalidLMax of int
 exception SphHarm_ThetaPhiInvalidDim of string
@@ -14,7 +15,7 @@ exception SphBess_InvalidQ of string
 module Nd = Owl_base_dense_ndarray_d
 module Cd = Owl_base_dense_ndarray_z
 
-(* Computes the complex spherical harmonics Y_l^m(theta, phi)
+(** Computes the complex spherical harmonics Y_l^m(theta, phi)
     @param l Degree of the harmonic (l >= 0)
     @param m Order of the harmonic (-l <= m <= l)
     @param theta Polar angle in [0, pi]
@@ -37,21 +38,21 @@ let sphHarm (lMax : int) (theta : Nd.arr) (phi : Nd.arr) : Cd.arr =
     ;
     if theta_dim <> 1 || phi_dim <> 1 then
         let msg =
-            Printf.sprintf "Theta dim: %d, Phi dim: %d" theta_dim phi_dim
+            sprintf "Theta dim: %d, Phi dim: %d" theta_dim phi_dim
         in
         raise (SphHarm_ThetaPhiInvalidDim msg)
     else ()
     ;
     if theta_len == 0 || phi_len == 0 then
         let msg =
-            Printf.sprintf "Theta len: %d, Phi len: %d" (theta_len) (phi_len)
+            sprintf "Theta len: %d, Phi len: %d" (theta_len) (phi_len)
         in
         raise(SphHarm_EmptyThetaOrPhi(msg))
     else ()
     ;
     if theta_len <> phi_len then
         let msg =
-            Printf.sprintf "Theta len: %d, Phi len: %d" (theta_len) (phi_len)
+            sprintf "Theta len: %d, Phi len: %d" (theta_len) (phi_len)
         in
         raise (SphHarm_ThetaPhiUnequal msg)
     else ()
@@ -104,7 +105,7 @@ let sphHarm (lMax : int) (theta : Nd.arr) (phi : Nd.arr) : Cd.arr =
 
     y
 
-(* Computes the spherical Bessel functions j_l for all orders l = 0..lMax over a q-grid
+(** Computes the spherical Bessel functions j_l for all orders l = 0..lMax over a q-grid
 and radii. For reference, j_0(x) = sin(x)/x is the Debye kernel. *)
 let sphBess (r : Nd.arr) (q : Nd.arr) (lMax : int) : Nd.arr =
     if Nd.numel r == 0 then

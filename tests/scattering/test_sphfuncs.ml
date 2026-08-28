@@ -2,8 +2,9 @@
 closed-form values, plus exception-contract checks.
 Prints nothing on success. On failure, prints one line per failing
 check and exits with a non-zero status. *)
+open Printf
 
-module S = Scatternet.SphFuncs
+module S = Scattering.SphFuncs
 module Nd = Owl_base_dense_ndarray_d
 module Cd = Owl_base_dense_ndarray_z
 
@@ -11,7 +12,7 @@ let tol = 1e-9
 
 let failures = ref 0
 
-let fail fmt = Printf.ksprintf (fun s -> incr failures; print_endline ("FAIL " ^ s)) fmt
+let fail fmt = ksprintf (fun s -> incr failures; print_endline ("FAIL " ^ s)) fmt
 
 let check_float name expected actual =
     let d = Float.abs (expected -. actual) in
@@ -48,7 +49,7 @@ let test_sphHarm_known_values () =
             let theta = Nd.of_array [| theta_v |] [| 1 |] in
             let phi = Nd.of_array [| phi_v |] [| 1 |] in
             let y = S.sphHarm 1 theta phi in
-            let tag = Printf.sprintf "sphHarm(theta=%.6f, phi=%.6f)" theta_v phi_v in
+            let tag = sprintf "sphHarm(theta=%.6f, phi=%.6f)" theta_v phi_v in
             check_complex (tag ^ " Y_0^0") { re = y00; im = 0.0 } (Cd.get y [| idx 0 0; 0 |]);
             check_complex (tag ^ " Y_1^0") { re = y10 theta_v; im = 0.0 } (Cd.get y [| idx 1 0; 0 |]);
             check_complex (tag ^ " Y_1^1") (y11 theta_v phi_v) (Cd.get y [| idx 1 1; 0 |]))
@@ -79,7 +80,7 @@ let test_sphBess_known_values () =
             let r = Nd.of_array [| x |] [| 1 |] in
             let q = Nd.of_array [| 1.0 |] [| 1 |] in
             let j = S.sphBess r q 1 in
-            let tag = Printf.sprintf "sphBess(x=%.6f)" x in
+            let tag = sprintf "sphBess(x=%.6f)" x in
             check_float (tag ^ " j_0") (j0 x) (Nd.get j [| 0; 0; 0 |]);
             check_float (tag ^ " j_1") (j1 x) (Nd.get j [| 1; 0; 0 |]))
         cases
