@@ -1,132 +1,78 @@
-(* Checks for Atomic_radii.Parser / Lexer / Db against known values and
-the real atomic_radii.sqlite3. Run from the repo root (db path is
-relative). Prints nothing on success; on failure prints one line per
-failing check and exits non-zero. *)
+(* Checks for Atomic_radii.AtomicRadiiSource -- the library's only public
+surface (Db/Parser/Toks/Lexer are sealed, see atomic_radii.mli). Run from
+the repo root (db path is relative). Prints nothing on success; on
+failure prints one line per failing check and exits non-zero. *)
 
-module P = Atomic_radii.Parser
-module D = Atomic_radii.Db
+module S = Atomic_radii.AtomicRadiiSource
 
 let failures = ref 0
 
 let fail fmt = Printf.ksprintf (fun s -> incr failures; print_endline ("FAIL " ^ s)) fmt
 
-let check_int name expected actual =
-    if expected <> actual then fail "%s: expected %d, got %d" name expected actual
-
-let check_string name expected actual =
-    if expected <> actual then fail "%s: expected %S, got %S" name expected actual
-
 let check_float name expected actual =
     let d = Float.abs (expected -. actual) in
     if d > 1e-9 then fail "%s: expected %f, got %f (diff %.3e)" name expected actual d
 
-let check_ion name expected (actual : P.ion) =
-    check_string (name ^ " element") expected.P.element actual.P.element;
-    check_int (name ^ " charge") expected.P.charge actual.P.charge
+let lookup_one (ion : string) : float option =
+    match List.of_seq (S.lookup (Seq.return ion)) with
+    | [ (got_ion, r) ] ->
+        if got_ion <> ion then fail "lookup_one %s: echoed ion was %S" ion got_ion;
+        r
+    | results -> fail "lookup_one %s: expected exactly 1 result, got %d" ion (List.length results); None
 
-let check_some name = function
-    | Some x -> x
-    | None -> fail "%s: expected Some, got None" name; assert false
+let check_some name expected = function
+    | Some r -> check_float name expected r
+    | None -> fail "%s: expected Some %f, got None" name expected
 
 let check_none name = function
     | None -> ()
-    | Some _ -> fail "%s: expected None, got Some" name
+    | Some r -> fail "%s: expected None, got Some %f" name r
 
-let check_raises name f =
-    match f () with
-    | _ -> fail "%s: expected an exception, none was raised" name
-    | exception _ -> ()
+(* ---- exact ion match, both token orderings ---- *)
 
-(* ---- Parser ---- *)
+let test_exact_ion_both_orderings () =
+    check_some "fe3+" 49.0 (lookup_one "fe3+");
+    check_some "fe+3" 49.0 (lookup_one "fe+3");
+    check_some "au1-" 220.0 (lookup_one "au1-")
 
-let test_parser_orderings () =
-    check_ion "fe3+ (elem charge sign)"
-        { element = "fe"; charge = 3 } (P.parse_string "fe3+");
-    check_ion "au1- (elem charge sign)"
-        { element = "au"; charge = -1 } (P.parse_string "au1-");
-    check_ion "na+ (bare sign, elem sign)"
-        { element = "na"; charge = 1 } (P.parse_string "na+");
-    check_ion "cl- (bare sign, elem sign)"
-        { element = "cl"; charge = -1 } (P.parse_string "cl-")
+(* ---- bare element falls through to atomic_radii ---- *)
 
-let test_parser_malformed () =
-    check_raises "empty string" (fun () -> P.parse_string "");
-    check_raises "no charge or sign" (fun () -> P.parse_string "fe");
-    check_raises "digits with no sign" (fun () -> P.parse_string "fe3");
-    check_raises "digits first, no element" (fun () -> P.parse_string "3+");
-    check_raises "trailing garbage" (fun () -> P.parse_string "fe3+x")
+let test_bare_element_fallback () =
+    check_some "fe" 1.274 (lookup_one "fe");
+    check_some "rn" 2.24 (lookup_one "rn")
 
-let test_parser_round_trip () =
-    List.iter
-        (fun s -> check_string ("round trip " ^ s) s (P.to_string (P.parse_string s)))
-        [ "fe3+"; "au1-"; "na1+"; "cl1-"; "fe4+" ];
-    check_raises "to_string of charge 0"
-        (fun () -> P.to_string { element = "fe"; charge = 0 })
+(* ---- nearest-charge fallback: fe has 2+/3+/4+/6+ on file, not 5+ ---- *)
 
-(* ---- Db (against the real atomic_radii.sqlite3) ---- *)
+let test_nearest_charge_fallback () =
+    let r5 = lookup_one "fe5+" in
+    let r4 = lookup_one "fe4+" in
+    match r5, r4 with
+    | Some v5, Some v4 -> check_float "fe5+ (nearest -> fe4+)" v4 v5
+    | _ -> fail "fe5+/fe4+: expected both to resolve, got %b/%b" (Option.is_some r5) (Option.is_some r4)
 
-let test_db_ion_radius db =
-    check_float "ion_radius fe3+" 49.0
-        (check_some "ion_radius fe3+" (D.ion_radius db "fe3+"));
-    check_none "ion_radius zz9+ (nonexistent)"
-        (D.ion_radius db "zz9+")
+(* ---- total miss ---- *)
 
-let test_db_ion_radius_of db =
-    let r =
-        check_some "ion_radius_of au1-" (D.ion_radius_of db (P.parse_string "au1-"))
-    in
-    check_float "ion_radius_of au1-" 220.0 r
+let test_total_miss () = check_none "zzzz9+ (garbage)" (lookup_one "zzzz9+")
 
-let test_db_element_radius db =
-    let r, t = check_some "element_radius rn" (D.element_radius db "rn") in
-    check_float "element_radius rn value" 2.24 r;
-    check_string "element_radius rn type" "vdw" t;
-    let r2, t2 = check_some "element_radius fe" (D.element_radius db "fe") in
-    check_float "element_radius fe value" 1.274 r2;
-    check_string "element_radius fe type" "metallic" t2;
-    check_none "element_radius nonexistent" (D.element_radius db "zz")
+(* ---- batch: order/count preserved, repeats deduped to the same result ---- *)
 
-let test_db_nearest_ion db =
-    check_string "nearest_ion fe target 5"
-        "fe4+" (check_some "nearest_ion fe target 5" (
-            D.nearest_ion db ~element:"fe" ~charge:5)
-            )
-        ;
-    check_string "nearest_ion fe target 3 (exact)"
-        "fe3+" (check_some "nearest_ion fe target 3" (
-            D.nearest_ion db ~element:"fe" ~charge:3)
-            )
-        ;
-    check_none "nearest_ion nonexistent element"
-        (D.nearest_ion db ~element:"zz" ~charge:1)
-
-let test_db_charges_for db =
-    let cs = D.charges_for db "fe" in
-    if cs <> [ 2; 3; 4; 6 ] then
-        fail "charges_for fe: expected [2;3;4;6], got [%s]"
-            (String.concat ";" (List.map string_of_int cs));
-    if D.charges_for db "zz" <> [] then fail "charges_for zz: expected []"
-
-let test_db_element_radii_batch db =
-    let results = D.element_radii_batch db [ "fe"; "o"; "zz"; "fe" ] in
-    let elts = List.sort compare (List.map fst results) in
-    (* "zz" omitted (not found); "fe" queried twice but that's the
-       caller's input, not deduped by this function -- so two "fe" rows. *)
-    if elts <> [ "fe"; "fe"; "o" ] then
-        fail "element_radii_batch: expected [fe;fe;o], got [%s]" (String.concat ";" elts)
+let test_batch_order_and_dedup () =
+    let input = [ "fe3+"; "zzzz9+"; "fe3+"; "rn" ] in
+    let results = List.of_seq (S.lookup (List.to_seq input)) in
+    let elems = List.map fst results in
+    if elems <> input then
+        fail "batch: expected order [%s], got [%s]"
+            (String.concat ";" input) (String.concat ";" elems);
+    match results with
+    | [ (_, Some r1); (_, None); (_, Some r2); (_, Some _) ] -> check_float "batch: repeated fe3+" r1 r2
+    | _ -> fail "batch: unexpected result shape"
 
 let () =
-    test_parser_orderings ();
-    test_parser_malformed ();
-    test_parser_round_trip ();
-    let db = D.open_db () in
-    test_db_ion_radius db;
-    test_db_ion_radius_of db;
-    test_db_element_radius db;
-    test_db_nearest_ion db;
-    test_db_charges_for db;
-    test_db_element_radii_batch db;
-    D.close_db db;
+    test_exact_ion_both_orderings ();
+    test_bare_element_fallback ();
+    test_nearest_charge_fallback ();
+    test_total_miss ();
+    test_batch_order_and_dedup ();
     if !failures > 0 then begin
         Printf.printf "%d check(s) failed\n" !failures;
         exit 1
