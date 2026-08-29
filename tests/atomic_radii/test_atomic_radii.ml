@@ -31,9 +31,9 @@ let check_none name = function
 (* ---- exact ion match, both token orderings ---- *)
 
 let test_exact_ion_both_orderings () =
-    check_some "fe3+" 49.0 (lookup_one "fe3+");
-    check_some "fe+3" 49.0 (lookup_one "fe+3");
-    check_some "au1-" 220.0 (lookup_one "au1-")
+    check_some "fe3+" 0.49 (lookup_one "fe3+");
+    check_some "fe+3" 0.49 (lookup_one "fe+3");
+    check_some "au1-" 2.2 (lookup_one "au1-")
 
 (* ---- bare element falls through to atomic_radii ---- *)
 
