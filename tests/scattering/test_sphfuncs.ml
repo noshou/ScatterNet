@@ -4,7 +4,7 @@ Prints nothing on success. On failure, prints one line per failing
 check and exits with a non-zero status. *)
 open Printf
 
-module S = Scattering.SphFuncs
+module S = Spherical_harmonics.SphFuncs
 module Nd = Owl_base_dense_ndarray_d
 module Cd = Owl_base_dense_ndarray_z
 

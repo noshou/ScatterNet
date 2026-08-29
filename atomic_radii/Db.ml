@@ -6,9 +6,12 @@ open Printf
 (* path to atomic_radii.sqlite3, relative to repo root *)
 let _DB_PATH = "atomic_radii/atomic_radii.sqlite3"
 
-(** opens the dtabase.
+(** opens the dtabase. [~mutex:`NO] is safe here because every caller is
+expected to hold its own private connection (see [Atomic_radii]'s
+per-domain connection), never a connection shared across domains, so
+sqlite3's own internal locking would be pure overhead.
 @return an open db handle *)
-let open_db () : db = db_open _DB_PATH
+let open_db () : db = db_open ~mutex:`NO _DB_PATH
 
 (**  closes database.
 @param db handle to close
@@ -37,14 +40,17 @@ let query_one
     ignore (finalize res);
     result
 
-(** Exact charge-aware lookup.
+(** Exact charge-aware lookup. [ionic_radii.radius] is stored in
+picometers (Shannon's raw published values, unconverted); this divides
+by 100 so every radius-returning function in this module is consistently
+in Angstrom, matching [atomic_radii.radius].
 @param  db handle to query
 @param  ion db-key-format ion string, e.g. ["fe3+"]
 @return the ion's radius in Angstrom, or [None] if not on file *)
 let ion_radius (db : db) (ion : string) : float option =
     query_one db "SELECT radius FROM ionic_radii WHERE ion = ?"
     [ TEXT ion ]
-    (fun res -> to_float_exn (column res 0))
+    (fun res -> to_float_exn (column res 0) /. 100.0)
 
 (** {!ion_radius} from an already-parsed {!Parser.ion}.
 @param  db handle to query

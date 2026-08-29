@@ -1,8 +1,8 @@
-(* Checks for Scattering.AtomicVolume against a dummy RadiiSource (no db
+(* Checks for Spherical_harmonics.AtomicVolume against a dummy RadiiSource (no db
 involved). Prints nothing on success; on failure prints one line per
 failing check and exits non-zero. *)
 
-module A = Scattering.AtomicVolume
+module A = Spherical_harmonics.AtomicVolume
 
 (* dummy source: fe -> 2.0, h -> 1.0, everything else -> not found *)
 module Dummy : A.RadiiSource = struct
