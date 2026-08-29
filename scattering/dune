@@ -1,0 +1,3 @@
+(library
+    (name scattering)
+    (libraries gsl lacaml sqlite3 pyml owl-base helpers atomic_radii))

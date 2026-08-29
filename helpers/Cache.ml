@@ -1,5 +1,4 @@
-(** A memoized value guarded by a mutex, since {!Stdlib.Lazy.force} alone
-    is not safe to call concurrently from multiple domains. *)
+(** A memoized value guarded by a mutex, since {!Stdlib.Lazy.force} is not thread safe. *)
 
 type 'a t = {
     value : 'a Lazy.t;

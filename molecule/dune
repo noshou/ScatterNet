@@ -1,3 +1,0 @@
-(library
-    (name molecule)
-    (libraries pyml owl-base helpers))

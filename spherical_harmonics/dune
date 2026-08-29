@@ -1,3 +1,0 @@
-(library
-    (name spherical_harmonics)
-    (libraries gsl lacaml sqlite3 pyml owl-base))
