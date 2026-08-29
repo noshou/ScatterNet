@@ -1,3 +1,9 @@
 (executable
-    (name test_atomic_volume)
-    (libraries spherical_harmonics))
+    (name test_sphfuncs)
+    (modules test_sphfuncs)
+    (libraries scattering))
+
+(executable
+    (name test_molecule)
+    (modules test_molecule)
+    (libraries scattering helpers))
