@@ -1,0 +1,3 @@
+(library
+    (name form_factor_xraydb)
+    (libraries pyml atomic_radii))

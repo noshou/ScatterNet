@@ -4,7 +4,7 @@ open Sqlite3.Data
 open Printf
 
 (* path to atomic_radii.sqlite3, relative to repo root *)
-let _DB_PATH = "atomic_radii/atomic_radii.sqlite3"
+let _DB_PATH = "atomic_radii_sqlite3/atomic_radii.sqlite3"
 
 (** opens the dtabase. [~mutex:`NO] is safe here because every caller is
 expected to hold its own private connection (see [Atomic_radii]'s

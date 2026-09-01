@@ -1,42 +1,15 @@
+open Atomic_volume
 open Helpers
-
-module Nd = Owl_dense_ndarray_d
-
-(** Defines a source for atomic radii with simple batch lookup. *)
-module type RadiiSource = sig
-
-    (** returns the atom/ion, paired with radius if found,
-        or the atom/ion alone if not found
-        @param ions atom/ion symbols to look up
-        @return each input paired with its radius (Angstrom), or [None] if not found *)
-    val lookup : string Seq.t -> (string * float option) Seq.t
-end
-
-(** Functor that takes a source of atomic radii, a batch of ions, and returns volumes *)
-module AtomicVolume (RadSrc : RadiiSource) = struct
-
-    (** returns atom/ion paired with (radius, volume) if found,
-        or atom/ion alone if not found.
-        @param ions atom/ion symbols to look up
-        @return each input paired with [(radius, volume)] (Angstrom, Angstrom^3),
-        or [None] if [RadSrc.lookup] found nothing for it *)
-    let get_vols (ions : string Seq.t) : (string * (float * float) option) Seq.t =
-        let rads = RadSrc.lookup ions in
-        Seq.map (fun rad ->
-            match rad with
-                | (elem, Some r) -> (elem, Some (r, (4. /. 3.) *. Float.pi *. r ** 3.))
-                | (elem, None)   -> (elem, None)
-        ) rads
-end
 
 (** Raised when coordinates, radii, or their shapes are invalid. *)
 exception Molecule_error of string
+
+module Nd = Owl_dense_ndarray_d
 
 (** Volume lookup backed by the real {!Atomic_radii_sqlite3.AtomicRadiiSqlite3Source}. *)
 module AV = AtomicVolume (Atomic_radii_sqlite3.AtomicRadiiSqlite3Source)
 
 type t = {
-    coords : Nd.arr;         (** (3, n): x, y, z, centered at the centroid. *)
     angles : Nd.arr Cache.t; (** (2, n): theta, phi in radians. *)
     r      : Nd.arr Cache.t; (** (1, n): radial distance from the centroid. *)
     vols   : Nd.arr Cache.t; (** (1, n): per-atom excluded volume. *)
@@ -99,9 +72,9 @@ let center_coords (coords : (float * float * float) array) : Nd.arr =
 let row (i : int) (a : Nd.arr) : Nd.arr = Nd.get_slice [ [ i ]; [] ] a
 
 (** Radial distance of each atom from the centroid, given its already-
-    sliced x/y/z rows. Shared by {!radii} and (via {!create}) {!angles},
-    so [coords] only ever gets sliced into x/y/z once per molecule
-    instead of once per field. *)
+    sliced x/y/z rows. Shared with {!angles_of_xyz} via {!create}, so
+    [coords] only ever gets sliced into x/y/z once per molecule instead
+    of once per field. *)
 let radii_of_xyz (x : Nd.arr) (y : Nd.arr) (z : Nd.arr) : Nd.arr =
     Nd.sqrt (Nd.add (Nd.add (Nd.mul x x) (Nd.mul y y)) (Nd.mul z z))
 
@@ -116,44 +89,13 @@ let angles_of_xyz (x : Nd.arr) (y : Nd.arr) (z : Nd.arr) (r : Nd.arr) : Nd.arr =
     let phi = Nd.atan2 y x in
     Nd.concatenate ~axis:0 [| theta; phi |]
 
-(** Radial distance of each atom from the centroid.
-    @param coords (3, n), centered
-    @return (1, n)
-    @raise Molecule_error if [coords] is empty or not (3, n) *)
-let radii (coords : Nd.arr) : Nd.arr =
-    let shape = Nd.shape coords in
-    if shape.(0) <> 3 then
-        raise (Molecule_error "coords must have exactly 3 rows")
-    else if shape.(1) = 0 then
-        raise (Molecule_error "Empty coordinates")
-    else
-        radii_of_xyz (row 0 coords) (row 1 coords) (row 2 coords)
-
-(** Polar (theta) and azimuthal (phi) angle of each atom.
-    @param coords (3, n), centered
-    @param r (1, n), radial distance, from {!radii}
-    @return (2, n), (theta, phi); in radians
-    @raise Molecule_error if shapes are empty, wrong, or mismatched *)
-let angles (coords : Nd.arr) (r : Nd.arr) : Nd.arr =
-    let (shape, shaper) = (Nd.shape coords, Nd.shape r) in
-    if shape.(0) <> 3 then
-        raise (Molecule_error "coords must have exactly 3 rows")
-    else if shaper.(0) <> 1 then
-        raise (Molecule_error "r must have exactly 1 row")
-    else if shape.(1) = 0 || shaper.(1) = 0 then
-        raise (Molecule_error "Empty coordinates or radii")
-    else if shape.(1) <> shaper.(1) then
-        raise (Molecule_error "Dimensions of coordinates and radii must match")
-    else
-        angles_of_xyz (row 0 coords) (row 1 coords) (row 2 coords) r
-
 (** Per-atom excluded volume, from atomic/ionic radii looked up by
     element symbol.
     @param elms element symbol per atom
     @return (1, n)
     @raise Molecule_error if [elms] is empty, or any element has no
     radius on file at all *)
-let vols (elms : string array) : Nd.arr =
+let compute_vols (elms : string array) : Nd.arr =
     let n = Array.length elms in
     if n = 0 then
         raise (Molecule_error "Empty elements")
@@ -191,8 +133,8 @@ let create
         let x = row 0 coords and y = row 1 coords and z = row 2 coords in
         let r_cache = Cache.make (fun () -> radii_of_xyz x y z) in
         let a_cache = Cache.make (fun () -> angles_of_xyz x y z (Cache.force r_cache)) in
-        let vols_cache = Cache.make (fun () -> vols elms) in
-        { coords; angles = a_cache; r = r_cache; vols = vols_cache; elms; name }
+        let vols_cache = Cache.make (fun () -> compute_vols elms) in
+        { angles = a_cache; r = r_cache; vols = vols_cache; elms; name }
 
 (** Flatten a (1, n) row into a genuine 1-D (n,) array. *)
 let flatten_row (a : Nd.arr) : Nd.arr = Nd.reshape a [| (Nd.shape a).(1) |]
@@ -211,3 +153,19 @@ let phi (m : t) : Nd.arr = flatten_row (Nd.get_slice [[1]; []] (Cache.force m.an
     @param m molecule
     @return (n,), Angstrom *)
 let r (m : t) : Nd.arr = flatten_row (Cache.force m.r)
+
+(** Per-atom excluded volume, flat.
+    @param m molecule
+    @return (n,), Angstrom^3
+    @raise Molecule_error if any element in [m] has no radius on file *)
+let vols (m : t) : Nd.arr = flatten_row (Cache.force m.vols)
+
+(** Element symbol per atom.
+    @param m molecule
+    @return elms, as passed to {!create} *)
+let elms (m : t) : string array = m.elms
+
+(** Molecule name.
+    @param m molecule
+    @return name, as passed to {!create} *)
+let name (m : t) : string = m.name

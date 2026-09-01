@@ -1,0 +1,3 @@
+(library
+    (name molecule)
+    (libraries owl sqlite3 helpers atomic_radii_sqlite3))
