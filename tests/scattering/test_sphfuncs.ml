@@ -5,8 +5,8 @@ check and exits with a non-zero status. *)
 open Printf
 
 module S = Scattering.SphFuncs
-module Nd = Owl_base_dense_ndarray_d
-module Cd = Owl_base_dense_ndarray_z
+module Nd = Owl_dense_ndarray_d
+module Cd = Owl_dense_ndarray_z
 
 let tol = 1e-9
 

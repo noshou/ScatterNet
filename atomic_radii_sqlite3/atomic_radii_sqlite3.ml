@@ -30,7 +30,7 @@ let resolve_one (ion : string) : float option =
             | None -> map fst (element_radius db parsed.element)))
     | exception Parser.Parse_error _ -> map fst (element_radius db ion)
 
-module AtomicRadiiSource = struct
+module AtomicRadiiSqlite3Source = struct
     (** Batch ion/element lookup, deduped within one call: each distinct input string is 
         resolved via {!resolve_one} at most once, cached for repeats.
         @param  ions atom/ion symbols to look up, e.g. ["fe3+"], ["fe+3"], ["fe"]

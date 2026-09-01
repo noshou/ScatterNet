@@ -1,9 +1,9 @@
-(* Checks for Atomic_radii.AtomicRadiiSource -- the library's only public
+(* Checks for Atomic_radii.AtomicRadiiSqlite3Source -- the library's only public
 surface (Db/Parser/Toks/Lexer are sealed, see atomic_radii.mli). Run from
 the repo root (db path is relative). Prints nothing on success; on
 failure prints one line per failing check and exits non-zero. *)
 
-module S = Atomic_radii.AtomicRadiiSource
+module S = Atomic_radii_sqlite3.AtomicRadiiSqlite3Source
 
 let failures = ref 0
 
@@ -18,7 +18,9 @@ let lookup_one (ion : string) : float option =
     | [ (got_ion, r) ] ->
         if got_ion <> ion then fail "lookup_one %s: echoed ion was %S" ion got_ion;
         r
-    | results -> fail "lookup_one %s: expected exactly 1 result, got %d" ion (List.length results); None
+    | results -> 
+        fail 
+        "lookup_one %s: expected exactly 1 result, got %d" ion (List.length results); None
 
 let check_some name expected = function
     | Some r -> check_float name expected r

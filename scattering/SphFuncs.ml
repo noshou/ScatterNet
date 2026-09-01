@@ -12,8 +12,8 @@ exception SphBess_EmptyQGrid of string
 exception SphBess_InvalidRadii of string
 exception SphBess_InvalidQ of string
 
-module Nd = Owl_base_dense_ndarray_d
-module Cd = Owl_base_dense_ndarray_z
+module Nd = Owl_dense_ndarray_d
+module Cd = Owl_dense_ndarray_z
 
 (** Computes the complex spherical harmonics Y_l^m(theta, phi)
     @param l Degree of the harmonic (l >= 0)
@@ -29,7 +29,7 @@ let sphHarm (lMax : int) (theta : Nd.arr) (phi : Nd.arr) : Cd.arr =
     let phi_dim = Array.length (Nd.shape phi) in
 
     (* assertion checks *)
-    if lMax < 0 then
+    if lMax < 0 then 
         raise(SphHarm_InvalidLMax(lMax))
     ;
     if lMax == 0 then
@@ -51,9 +51,7 @@ let sphHarm (lMax : int) (theta : Nd.arr) (phi : Nd.arr) : Cd.arr =
     else ()
     ;
     if theta_len <> phi_len then
-        let msg =
-            sprintf "Theta len: %d, Phi len: %d" (theta_len) (phi_len)
-        in
+        let msg = sprintf "Theta len: %d, Phi len: %d" (theta_len) (phi_len) in
         raise (SphHarm_ThetaPhiUnequal msg)
     else ()
     ;
