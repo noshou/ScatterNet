@@ -14,13 +14,14 @@ let check_float name expected actual =
     if d > 1e-9 then fail "%s: expected %f, got %f (diff %.3e)" name expected actual d
 
 let lookup_one (ion : string) : float option =
-    match List.of_seq (S.lookup (Seq.return ion)) with
-    | [ (got_ion, r) ] ->
+    match S.lookup [| ion |] with
+    | [| (got_ion, r) |] ->
         if got_ion <> ion then fail "lookup_one %s: echoed ion was %S" ion got_ion;
         r
-    | results -> 
-        fail 
-        "lookup_one %s: expected exactly 1 result, got %d" ion (List.length results); None
+    | results ->
+        fail "lookup_one %s: expected exactly 1 result, got %d"
+            ion (Array.length results);
+        None
 
 let check_some name expected = function
     | Some r -> check_float name expected r
@@ -50,7 +51,8 @@ let test_nearest_charge_fallback () =
     let r4 = lookup_one "fe4+" in
     match r5, r4 with
     | Some v5, Some v4 -> check_float "fe5+ (nearest -> fe4+)" v4 v5
-    | _ -> fail "fe5+/fe4+: expected both to resolve, got %b/%b" (Option.is_some r5) (Option.is_some r4)
+    | _ ->  fail "fe5+/fe4+: expected both to resolve, got %b/%b" 
+            (Option.is_some r5) (Option.is_some r4)
 
 (* ---- total miss ---- *)
 
@@ -59,14 +61,16 @@ let test_total_miss () = check_none "zzzz9+ (garbage)" (lookup_one "zzzz9+")
 (* ---- batch: order/count preserved, repeats deduped to the same result ---- *)
 
 let test_batch_order_and_dedup () =
-    let input = [ "fe3+"; "zzzz9+"; "fe3+"; "rn" ] in
-    let results = List.of_seq (S.lookup (List.to_seq input)) in
-    let elems = List.map fst results in
+    let input = [| "fe3+"; "zzzz9+"; "fe3+"; "rn" |] in
+    let results = S.lookup input in
+    let elems = Array.map fst results in
     if elems <> input then
         fail "batch: expected order [%s], got [%s]"
-            (String.concat ";" input) (String.concat ";" elems);
+            (String.concat ";" (Array.to_list input))
+            (String.concat ";" (Array.to_list elems));
     match results with
-    | [ (_, Some r1); (_, None); (_, Some r2); (_, Some _) ] -> check_float "batch: repeated fe3+" r1 r2
+    | [| (_, Some r1); (_, None); (_, Some r2); (_, Some _) |] ->
+            check_float "batch: repeated fe3+" r1 r2
     | _ -> fail "batch: unexpected result shape"
 
 let () =

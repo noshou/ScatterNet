@@ -5,8 +5,6 @@ check and exits with a non-zero status. *)
 open Printf
 
 module S = Scattering.SphFuncs
-module Nd = Owl_dense_ndarray_d
-module Cd = Owl_dense_ndarray_z
 
 let tol = 1e-9
 
@@ -44,25 +42,30 @@ let test_sphHarm_known_values () =
     let cases =
         [ (pi /. 2.0, 0.0); (0.0, 0.7) ]
     in
-    List.iter
-        (fun (theta_v, phi_v) ->
-            let theta = Nd.of_array [| theta_v |] [| 1 |] in
-            let phi = Nd.of_array [| phi_v |] [| 1 |] in
-            let y = S.sphHarm 1 theta phi in
-            let tag = sprintf "sphHarm(theta=%.6f, phi=%.6f)" theta_v phi_v in
-            check_complex (tag ^ " Y_0^0") { re = y00; im = 0.0 } (Cd.get y [| idx 0 0; 0 |]);
-            check_complex (tag ^ " Y_1^0") { re = y10 theta_v; im = 0.0 } (Cd.get y [| idx 1 0; 0 |]);
-            check_complex (tag ^ " Y_1^1") (y11 theta_v phi_v) (Cd.get y [| idx 1 1; 0 |]))
-        cases
+    List.iter (fun (theta_v, phi_v) ->
+        let theta = Owl_dense_ndarray_d.of_array [| theta_v |] [| 1 |] in
+        let phi = Owl_dense_ndarray_d.of_array [| phi_v |] [| 1 |] in
+        let y = S.sphHarm 1 theta phi in
+        let tag = sprintf "sphHarm(theta=%.6f, phi=%.6f)" theta_v phi_v in
+        check_complex (tag ^ " Y_0^0") { re = y00; im = 0.0 } (
+            Owl_dense_ndarray_z.get y [| idx 0 0; 0 |]
+        );
+        check_complex (tag ^ " Y_1^0") { re = y10 theta_v; im = 0.0 } (
+            Owl_dense_ndarray_z.get y [| idx 1 0; 0 |]
+        );
+        check_complex (tag ^ " Y_1^1") (y11 theta_v phi_v) (
+            Owl_dense_ndarray_z.get y [| idx 1 1; 0 |]
+        )
+    ) cases
 
 (* ---- sphHarm: exception contract ---- *)
 
 let test_sphHarm_exceptions () =
-    let theta1 = Nd.of_array [| 1.0 |] [| 1 |] in
-    let phi1 = Nd.of_array [| 1.0 |] [| 1 |] in
-    let theta2 = Nd.of_array [| 1.0; 2.0 |] [| 2 |] in
-    let empty = Nd.of_array [||] [| 0 |] in
-    let theta_2d = Nd.zeros [| 2; 2 |] in
+    let theta1 = Owl_dense_ndarray_d.of_array [| 1.0 |] [| 1 |] in
+    let phi1 = Owl_dense_ndarray_d.of_array [| 1.0 |] [| 1 |] in
+    let theta2 = Owl_dense_ndarray_d.of_array [| 1.0; 2.0 |] [| 2 |] in
+    let empty = Owl_dense_ndarray_d.of_array [||] [| 0 |] in
+    let theta_2d = Owl_dense_ndarray_d.zeros [| 2; 2 |] in
     check_raises "sphHarm negative lMax" (fun () -> S.sphHarm (-1) theta1 phi1);
     check_raises "sphHarm mismatched lengths" (fun () -> S.sphHarm 2 theta1 theta2);
     check_raises "sphHarm empty theta/phi" (fun () -> S.sphHarm 2 empty empty);
@@ -77,21 +80,21 @@ let test_sphBess_known_values () =
     let cases = [ 1.0; 0.0 ] in
     List.iter
         (fun x ->
-            let r = Nd.of_array [| x |] [| 1 |] in
-            let q = Nd.of_array [| 1.0 |] [| 1 |] in
+            let r = Owl_dense_ndarray_d.of_array [| x |] [| 1 |] in
+            let q = Owl_dense_ndarray_d.of_array [| 1.0 |] [| 1 |] in
             let j = S.sphBess r q 1 in
             let tag = sprintf "sphBess(x=%.6f)" x in
-            check_float (tag ^ " j_0") (j0 x) (Nd.get j [| 0; 0; 0 |]);
-            check_float (tag ^ " j_1") (j1 x) (Nd.get j [| 1; 0; 0 |]))
+            check_float (tag ^ " j_0") (j0 x) (Owl_dense_ndarray_d.get j [| 0; 0; 0 |]);
+            check_float (tag ^ " j_1") (j1 x) (Owl_dense_ndarray_d.get j [| 1; 0; 0 |]))
         cases
 
 (* ---- sphBess: exception contract ---- *)
 
 let test_sphBess_exceptions () =
-    let r1 = Nd.of_array [| 1.0 |] [| 1 |] in
-    let q1 = Nd.of_array [| 1.0 |] [| 1 |] in
-    let neg = Nd.of_array [| -1.0 |] [| 1 |] in
-    let empty = Nd.of_array [||] [| 0 |] in
+    let r1 = Owl_dense_ndarray_d.of_array [| 1.0 |] [| 1 |] in
+    let q1 = Owl_dense_ndarray_d.of_array [| 1.0 |] [| 1 |] in
+    let neg = Owl_dense_ndarray_d.of_array [| -1.0 |] [| 1 |] in
+    let empty = Owl_dense_ndarray_d.of_array [||] [| 0 |] in
     check_raises "sphBess empty radii" (fun () -> S.sphBess empty q1 1);
     check_raises "sphBess empty q grid" (fun () -> S.sphBess r1 empty 1);
     check_raises "sphBess negative radii" (fun () -> S.sphBess neg q1 1);
