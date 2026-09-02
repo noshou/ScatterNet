@@ -1,5 +1,0 @@
-(ocamllex Lexer)
-
-(library
-    (name atomic_radii_sqlite3)
-    (libraries sqlite3))

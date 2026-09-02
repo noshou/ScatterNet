@@ -3,8 +3,10 @@ open Sqlite3
 open Sqlite3.Data
 open Printf
 
-(* path to atomic_radii.sqlite3, relative to repo root *)
-let _DB_PATH = "atomic_radii_sqlite3/atomic_radii.sqlite3"
+(* absolute path to atomic_radii.sqlite3, via Helpers.repo_root - not a
+   cwd-relative string, since dune runtest's cwd differs from dune exec's *)
+let _DB_PATH =
+    Filename.concat Helpers.repo_root "molecule/atomic_radii_sqlite3/atomic_radii.sqlite3"
 
 (** opens the dtabase. [~mutex:`NO] is safe here because every caller is
 expected to hold its own private connection (see [Atomic_radii]'s

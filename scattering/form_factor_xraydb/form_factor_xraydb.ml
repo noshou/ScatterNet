@@ -1,7 +1,12 @@
 open Printf
 
+(** Raised when the pyml boundary fails (missing python deps, or input
+    FormFact_py.py rejected) or when a {!FormFactorSourceXrayDB.lookup}
+    query references a q-point outside the container's grid. *)
 exception Form_factor_xraydb_error of string
 
+(** Form factors for a batch of ions over a shared q grid, plus the
+    construction-time log (one "TIER ion" line per non-full ion). *)
 type ff = {
     tbl : (string, Owl_dense_ndarray_z.arr) Hashtbl.t;
     qmp : (float, int) Hashtbl.t;
@@ -14,10 +19,13 @@ let () =
     Py.initialize ()
 
 let py_mod : Py.Object.t =
+    (* absolute path, via Helpers.repo_root - not a cwd-relative string,
+       since dune runtest's cwd differs from dune exec's *)
+    let dir = Filename.concat Helpers.repo_root "scattering/form_factor_xraydb" in
     let sys = Py.import "sys" in
     let path = Py.Module.get sys "path" in
     ignore (Py.Object.call_method path "insert"
-        [| Py.Int.of_int 0; Py.String.of_string "form_factor_xraydb" |]);
+        [| Py.Int.of_int 0; Py.String.of_string dir |]);
     try
         Py.import "FormFact_py"
     with
@@ -27,6 +35,12 @@ let py_mod : Py.Object.t =
                 installed? Try: pip install -r form_factor_xraydb/requirements.txt"
             (Py.Object.to_string errvalue)))
 
+(** Form factors for a batch of ions, one entry per unique ion.
+    @param ions ion/element symbols to look up
+    @param energy incident energy, eV
+    @param qvals q grid, Angstrom^-1
+    @return a new [ff]
+    @raise Form_factor_xraydb_error if python rejects the input *)
 let compute_form_factors
     (ions : string array) (energy : float)
     (qvals : Owl_dense_ndarray_d.arr) : ff =
@@ -79,17 +93,38 @@ let compute_form_factors
                     )
     )
 
+(** Concrete {!compute_form_factors}-backed form factor source: builds a container from a
+    batch of ions/energy/qvals, then answers per-ion, per-q-point queries against it. *)
 module FormFactorSourceXrayDB = struct
 
     type t = ff
 
+    (** The construction-time log for [t]
+        @param t the built form factor container
+        @return the log recorded when [t] was built *)
     let log (t : t) : string array = t.log
 
+    (** Build a form factor container for a batch of ions at one energy, over a q grid.
+        @param energy incident energy, eV
+        @param ions ion/element symbols to look up
+        @param qvals q grid, Angstrom^-1
+        @return a new [t]
+        @raise Form_factor_xraydb_error if the underlying python call fails *)
     let create
         (energy : float) (ions : string list)
         (qvals : Owl_dense_ndarray_d.arr) : t =
         compute_form_factors (Array.of_list ions) energy qvals
 
+    (** Form factors for the given ions at the given q-points. Invalid elements and
+        dummy sites are dropped. Check log for more details.
+
+        @param t the built form factor container
+        @param ions the ions to query
+        @param qvals the q-points to query
+        @return one [(ion, form factors)] pair per ion actually found,
+        each form factor array positionally aligned with [qvals]
+        @raise Form_factor_xraydb_error if a queried q isn't one of [t]'s
+        q-points *)
     let lookup
         (t : t) (ions : string list) (qvals : Owl_dense_ndarray_d.arr)
         : (string * Owl_dense_ndarray_z.arr) list =

@@ -1,4 +1,0 @@
-(executable
-    (name test_sphfuncs)
-    (modules test_sphfuncs)
-    (libraries scattering))
