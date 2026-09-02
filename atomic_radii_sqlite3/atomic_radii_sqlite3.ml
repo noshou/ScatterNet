@@ -31,13 +31,9 @@ let resolve_one (ion : string) : float option =
     | exception Parser.Parse_error _ -> map fst (element_radius db ion)
 
 module AtomicRadiiSqlite3Source = struct
-    (** Batch ion/element lookup, deduped within one call: each distinct input string is 
-        resolved via {!resolve_one} at most once, cached for repeats.
-        @param  ions atom/ion symbols to look up, e.g. ["fe3+"], ["fe+3"], ["fe"]
-        @return each input paired with radius (Angstrom), or [None] if nothing matched. *)
-    let lookup (ions : string Seq.t) : (string * float option) Seq.t =
+    let lookup (ions : string array) : (string * float option) array =
         let cache : (string, float option) Hashtbl.t = Hashtbl.create 16 in
-        Seq.map (fun ion -> 
+        Array.map (fun ion ->
             match Hashtbl.find_opt cache ion with
                 | Some cached -> (ion, cached)
                 | None ->

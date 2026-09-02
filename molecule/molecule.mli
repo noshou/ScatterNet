@@ -1,5 +1,3 @@
-module Nd = Owl_dense_ndarray_d
-
 (** Raised when coordinates, radii, or their shapes are invalid. *)
 exception Molecule_error of string
 
@@ -20,23 +18,23 @@ val create : string -> string array -> (float * float * float) array -> t
 (** Polar angle per atom, flat.
     @param m molecule
     @return (n,), radians *)
-val theta : t -> Nd.arr
+val theta : t -> Owl_dense_ndarray_d.arr
 
 (** Azimuthal angle per atom, flat.
     @param m molecule
     @return (n,), radians *)
-val phi : t -> Nd.arr
+val phi : t -> Owl_dense_ndarray_d.arr
 
 (** Radial distance from centroid per atom, flat.
     @param m molecule
     @return (n,), Angstrom *)
-val r : t -> Nd.arr
+val r : t -> Owl_dense_ndarray_d.arr
 
 (** Per-atom excluded volume, flat.
     @param m molecule
     @return (n,), Angstrom^3
     @raise Molecule_error if any element in [m] has no radius on file *)
-val vols : t -> Nd.arr
+val vols : t -> Owl_dense_ndarray_d.arr
 
 (** Element symbol per atom.
     @param m molecule

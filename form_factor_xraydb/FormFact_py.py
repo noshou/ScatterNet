@@ -1,25 +1,21 @@
 """
-Form factor convention: f(q, E) = f0(s) + f1(E) + i*f2(E)
-where s = q / (4*pi), f0 is the Thomson term, f1/f2 are the Chantler
-anomalous corrections.
+Form factor convention: f(q, E) = f0(s) + f1(E) + i*f2(E) where s = q / (4*pi), 
+f0 is the Thompson term, f1/f2 are the Chantler anomalous corrections.
 """
 
 import re
+from typing import Literal
 
 import numpy as np
 from xraydb import chantler_energies, f0, f1_chantler, f2_chantler
 
 _CHARGE_RE = re.compile(r"[0-9]*[+\-]+$")
 
-def log_q_grid(qMin, qMax, n_points):
-    """Log-spaced q grid. qMin must be > 0."""
-    if qMin <= 0:
-        raise ValueError("log_q_grid: qMin must be > 0")
-    if qMax <= qMin:
-        raise ValueError("log_q_grid: qMax must be > qMin")
-    return np.geomspace(qMin, qMax, n_points, dtype=np.float64)
+Tier = Literal["dummy", "f0_only", "full"]
 
-def compute_form_factors(ions, energy, qvals):
+def compute_form_factors(
+    ions: list[str], energy: float, qvals: np.ndarray
+) -> tuple[list[tuple[str, np.ndarray]], list[str]]:
     """Form factors for a batch of ions, one entry per unique ion.
 
     ions : list[str]
@@ -27,20 +23,28 @@ def compute_form_factors(ions, energy, qvals):
     qvals : ndarray of float64, shape (Q,)
 
     Returns (ff, log):
-        ff:     dict[str, ndarray of complex128], one row per unique ion
-                that isn't a dummy site
+        ff:     list[(str, ndarray of complex128)], one (ion, row) pair per
+                unique ion that isn't a dummy site
         log:    list[str], one "TIER ion" line per non-full ion, meant to
                 be printed by the caller, not written to a file here
+
+    Raises ValueError if ions/qvals is empty, energy <= 0, or any qval < 0.
     """
-    def __strip_charge(ion):
+    if len(ions) == 0:
+        raise ValueError("compute_form_factors: ions must not be empty")
+    if energy <= 0:
+        raise ValueError("compute_form_factors: energy must be > 0")
+    if len(qvals) == 0:
+        raise ValueError("compute_form_factors: qvals must not be empty")
+    if np.any(qvals < 0):
+        raise ValueError("compute_form_factors: qvals must be >= 0")
+
+    def __strip_charge(ion: str) -> str:
         """Bare element symbol, e.g. 'Fe3+' -> 'Fe'."""
         return _CHARGE_RE.sub("", ion)
 
-    def __classify(element, energy):
-        """Which formula applies to this element at this energy.
-
-        Returns "dummy", "f0_only", or "full".
-        """
+    def __classify(element: str, energy: float) -> Tier:
+        """Which formula applies to this element at this energy."""
         try:
             f0(element, np.array([0.0]))
         except Exception:
@@ -59,7 +63,7 @@ def compute_form_factors(ions, energy, qvals):
 
         return "full"
 
-    def __form_factor(ion, s, energy, tier):
+    def __form_factor(ion: str, s: np.ndarray, energy: float, tier: Tier) -> np.ndarray:
         """Complex form factor for one ion, given its tier from __classify().
 
         s : ndarray of float64, the Cromer-Mann variable q/(4*pi)
@@ -79,8 +83,8 @@ def compute_form_factors(ions, energy, qvals):
         return (f0_ + f1_ + 1j * f2_).astype(np.complex128)
 
     s = qvals / (4.0 * np.pi)
-    ff = {}
-    log = []
+    ff: list[tuple[str, np.ndarray]] = []
+    log: list[str] = []
     for ion in dict.fromkeys(ions):
         element = __strip_charge(ion)
         tier = __classify(element, energy)
@@ -89,5 +93,5 @@ def compute_form_factors(ions, energy, qvals):
             continue
         if tier == "f0_only":
             log.append("F0-ONLY " + ion)
-        ff[ion] = __form_factor(ion, s, energy, tier)
+        ff.append((ion, __form_factor(ion, s, energy, tier)))
     return ff, log
