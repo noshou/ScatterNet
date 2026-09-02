@@ -1,2 +1,6 @@
+(include_subdirs unqualified)
+
 (library
-    (name helpers))
+    (name helpers)
+    (inline_tests)
+    (preprocess (pps ppx_inline_test)))
