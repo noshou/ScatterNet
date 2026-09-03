@@ -2,14 +2,14 @@
 A molecule: per-atom coordinates centered at the centroid, with `r`, `theta`,
 `phi` computed eagerly and `radii`, `vols` lazily.
 """
-module Molecules
+module  Molecules
 
-using ..Cache: Lazy, force
-using ..Interfaces: RadiiSource, lookup
-using ..AtomicRadii: AtomicRadiiSource
+using   ..Cache: Lazy, force
+using   ..Interfaces: RadiiSource, lookup
+using   ..AtomicRadii: AtomicRadiiSource
 
-export Molecule, MoleculeError, create,
-       r, theta, phi, coords, radii, vols, elms, name
+export  Molecule, MoleculeError, create, r, theta, phi, 
+        coords, radii, vols, elms, name
 
 struct MoleculeError <: Exception; msg::String end
 Base.showerror(io::IO, e::MoleculeError) = print(io, "MoleculeError: ", e.msg)

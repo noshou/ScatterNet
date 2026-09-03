@@ -1,4 +1,3 @@
-# 1:1 port of molecule/modules/AtomicRadiiSqlite3/test/test_atomic_radii_sqlite3.ml
 using .AtomicRadii: lookup
 
 lookup_one(ion) = lookup([ion])[1][2]

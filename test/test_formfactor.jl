@@ -1,4 +1,3 @@
-# 1:1 port of scattering/modules/FormFactorXrayDB/test/test_form_factor_xraydb.ml
 # Needs the CondaPkg env (numpy + xraydb); skipped if unavailable.
 using .FormFactorXrayDB: compute_form_factors, FormFactorError
 const F = FormFactorXrayDB

@@ -1,4 +1,3 @@
-# 1:1 port of molecule/test/test_molecule.ml
 using .Molecules: create, r, theta, phi, radii, vols, coords, MoleculeError
 
 @testset "Molecules" begin
@@ -27,8 +26,10 @@ using .Molecules: create, r, theta, phi, radii, vols, coords, MoleculeError
     end
 
     @testset "vols for known elements" begin
-        m = create("test", ["fe", "o", "rn"],
-                   [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0)])
+        m = create(
+            "test", ["fe", "o", "rn"],
+            [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0)]
+        )
         @test length(vols(m)) == 3
         ev(x) = (4.0 / 3.0) * pi * x^3
         @test check_float(vols(m)[1], ev(1.274))
@@ -41,8 +42,10 @@ using .Molecules: create, r, theta, phi, radii, vols, coords, MoleculeError
     end
 
     @testset "create computes r/theta/phi/vols; repeat access stable" begin
-        m = create("test", ["o", "h", "h"],
-                   [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)])
+        m = create(
+            "test", ["o", "h", "h"],
+            [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)]
+        )
         @test length(r(m)) == 3
         @test check_float(r(m)[1], 0.4714045208)
         @test length(theta(m)) == 3 && length(phi(m)) == 3 && length(vols(m)) == 3
