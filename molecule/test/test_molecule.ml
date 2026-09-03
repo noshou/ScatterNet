@@ -41,8 +41,7 @@ let test_two_atoms_on_x_axis () =
 let test_centering_shifts_to_centroid () =
     (* atoms at (0,0,0) and (2,0,0): centroid is (1,0,0), so both atoms end
     up 1 unit from it. If centering hadn't happened, r would be [0, 2]
-    instead of [1, 1] - r is the only externally visible witness of
-    centering, since coords itself isn't exposed. *)
+    instead of [1, 1]. *)
     let m = M.create "test" [| "h"; "h" |] [| (0.0, 0.0, 0.0); (2.0, 0.0, 0.0) |] in
     let r = M.r m in
     check_float "atom0 r after centering" 1.0 (Owl_dense_ndarray_d.get r [| 0 |]);

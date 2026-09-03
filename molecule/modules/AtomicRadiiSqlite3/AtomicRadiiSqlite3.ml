@@ -27,7 +27,7 @@ let resolve_one (ion : string) : float option =
             | None -> map fst (element_radius db parsed.element)))
     | exception Parser.Parse_error _ -> map fst (element_radius db ion)
 
-module AtomicRadiiSqlite3Source = struct
+module AtomicRadiiSqlite3Source : RadSrc.RadiiSource = struct
     (** @param ions atom/ion symbols to look up, e.g. ["fe3+"], ["fe+3"], ["fe"]
         @return each input paired with its radius (Angstrom), or [None]
         if nothing matched at any tier of the fallback chain *)

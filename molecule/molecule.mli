@@ -30,6 +30,17 @@ val phi : t -> Owl_dense_ndarray_d.arr
     @return (n,), Angstrom *)
 val r : t -> Owl_dense_ndarray_d.arr
 
+(** Per-atom Cartesian coordinates, centered at the centroid.
+    @param m molecule
+    @return (3, n), Angstrom: rows are x, y, z *)
+val coords : t -> Owl_dense_ndarray_d.arr
+
+(** Per-atom atomic/ionic radius, flat.
+    @param m molecule
+    @return (n,), Angstrom
+    @raise Molecule_error if any element in [m] has no radius on file *)
+val radii : t -> Owl_dense_ndarray_d.arr
+
 (** Per-atom excluded volume, flat.
     @param m molecule
     @return (n,), Angstrom^3
