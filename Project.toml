@@ -1,0 +1,23 @@
+name = "ScatterNet"
+uuid = "f10a6c88-74b5-485f-9c8c-589f8f9e3c2a"
+authors = ["30nathan2002@gmail.com"]
+version = "0.1.0"
+
+[deps]
+Bessels = "0e736298-9ec6-45e8-9647-e4fc86a2fe38"
+CondaPkg = "992eb4ea-22a4-4c89-a5bb-47a3300528ab"
+DBInterface = "a10d1c49-ce27-4219-8d33-6db1a4562965"
+LegendrePolynomials = "3db4a2ba-fc88-11e8-3e01-49c72059a882"
+PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
+SQLite = "0aa819cd-b072-5ff4-a722-6bc24af294d9"
+SphericalHarmonics = "c489a379-e885-57ff-9236-bd896d33c250"
+
+[compat]
+Bessels = "0.2"
+CondaPkg = "0.2"
+DBInterface = "2"
+LegendrePolynomials = "0.4"
+PythonCall = "0.9"
+SQLite = "1"
+SphericalHarmonics = "0.1"
+julia = "1.10"

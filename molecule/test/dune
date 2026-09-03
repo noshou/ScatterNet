@@ -1,8 +1,0 @@
-; (include_subdirs no) is required here: molecule/dune declares
-; (include_subdirs unqualified), and dune forbids an executable stanza in a
-; subdir of that without opting the subdir out.
-(include_subdirs no)
-
-(executable
-    (name test_molecule)
-    (libraries molecule))
