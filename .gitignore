@@ -1,8 +1,8 @@
 # Julia
-/Manifest.toml
+Manifest.toml
 /test/Manifest.toml
-/LocalPreferences.toml
-/.CondaPkg/
+LocalPreferences.toml
+.CondaPkg/
 /docs/build/
 *.cov
 *.jl.mem

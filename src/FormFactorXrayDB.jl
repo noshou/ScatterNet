@@ -39,8 +39,10 @@ function _pymod()::Py
 end
 
 "Form factors for a batch of ions at `energy` (eV) over `qvals` (Å⁻¹); one row per unique ion."
-function compute_form_factors(ions::AbstractVector{<:AbstractString}, energy::Real,
-                              qvals::AbstractVector{<:Real})::FF
+function compute_form_factors(
+    ions::AbstractVector{<:AbstractString}, energy::Real,
+    qvals::AbstractVector{<:Real}
+)::FF
     qs = collect(Float64, qvals)
     np = pyimport("numpy")
     try

@@ -1,5 +1,5 @@
 # 1:1 port of molecule/test/test_molecule.ml
-using .Molecules: create, r, theta, phi, vols, coords, MoleculeError
+using .Molecules: create, r, theta, phi, radii, vols, coords, MoleculeError
 
 @testset "Molecules" begin
     @testset "two atoms on x axis" begin
