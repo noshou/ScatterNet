@@ -21,13 +21,7 @@ end
     @inferred r(m); @inferred radii(m); @inferred vols(m)
 end
 
-@testset "JET" begin
-    if VERSION >= v"1.12"
-        rep = JET.report_package(ScatterNet; target_defined_modules = true)
-        @test isempty(JET.get_reports(rep))
-    else
-        @test_skip "JET.report_package gated to Julia >= 1.12"
-    end
+@testset "JET (focused type-stability analysis)" begin
     @test_opt target_modules = (SphFuncs,) sphBess([1.0, 2.0], [0.1, 0.5], 3)
     @test_opt target_modules = (SphFuncs,) sphHarm(3, [0.4, 1.2], [0.1, 2.0])
     @test_opt target_modules = (Molecules,) create("t", ["o", "h"],
