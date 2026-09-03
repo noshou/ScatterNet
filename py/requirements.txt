@@ -1,0 +1,5 @@
+# NON-AUTHORITATIVE. The Julia package provisions Python via CondaPkg.toml
+# (at the repo root) through PythonCall/CondaPkg. This file is only a hint for
+# running py/FormFact_py.py standalone under a plain CPython.
+xraydb>=4.5.8
+numpy>=1.26

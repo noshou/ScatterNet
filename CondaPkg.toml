@@ -1,0 +1,14 @@
+# PythonCall/CondaPkg auto-provisions an isolated Python for the xraydb bridge.
+# No system Python, no manual venv, no pyml/libpython juggling. The env builds
+# on the first `pyimport`; force it with `using CondaPkg; CondaPkg.resolve()`.
+# aarch64: conda-forge and pip both have arm64 builds for these.
+channels = ["conda-forge"]
+
+[deps]
+# conda packages (real dependency resolution — preferred over pip)
+python = ">=3.9,<4"
+numpy = ">=1.26"
+
+[pip.deps]
+# pure-Python, pip-only
+xraydb = ">=4.5.8"
