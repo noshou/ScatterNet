@@ -6,7 +6,7 @@ an external test executable. *)
 let check_float expected actual = Float.abs (expected -. actual) < 1e-9
 
 let lookup_one (ion : string) : float option =
-    match Atomic_radii_sqlite3.AtomicRadiiSqlite3Source.lookup [| ion |] with
+    match AtomicRadiiSqlite3.AtomicRadiiSqlite3Source.lookup [| ion |] with
     | [| (_, r) |] -> r
     | _ -> assert false
 
@@ -29,7 +29,7 @@ let%test "total miss" = lookup_one "zzzz9+" = None
 
 let%test "batch: order/count preserved, repeats deduped to the same result" =
     let input = [| "fe3+"; "zzzz9+"; "fe3+"; "rn" |] in
-    let results = Atomic_radii_sqlite3.AtomicRadiiSqlite3Source.lookup input in
+    let results = AtomicRadiiSqlite3.AtomicRadiiSqlite3Source.lookup input in
     Array.map fst results = input
     &&
     match results with

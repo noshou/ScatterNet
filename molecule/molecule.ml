@@ -1,14 +1,21 @@
-open AtmVol_RadSrc
 open Helpers
 
 exception Molecule_error of string
 
-(** Volume lookup backed by the real {!Atomic_radii_sqlite3.AtomicRadiiSqlite3Source}. *)
-module AV = AtomicVolume (Atomic_radii_sqlite3.AtomicRadiiSqlite3Source)
+(** Atomic/ionic radii source, backed by the real
+    {!AtomicRadiiSqlite3.AtomicRadiiSqlite3Source}. Swap this binding
+    for a different {!RadSrc.RadiiSource} to change where radii come from. *)
+module Radii : RadSrc.RadiiSource = AtomicRadiiSqlite3.AtomicRadiiSqlite3Source
+
+(** Excluded volume of a hard sphere of the given radius
+    (Angstrom -> Angstrom^3). *)
+let sphere_volume (r : float) : float = (4. /. 3.) *. Float.pi *. r ** 3.
 
 type t = {
+    coords : Owl_dense_ndarray_d.arr;         (** (3, n): centered x, y, z in Angstrom *)
     angles : Owl_dense_ndarray_d.arr Cache.t; (** (2, n): theta, phi in radians *)
     r      : Owl_dense_ndarray_d.arr Cache.t; (** (1, n): radial distance from centroid *)
+    radii  : Owl_dense_ndarray_d.arr Cache.t; (** (1, n): per-atom atomic/ionic radius *)
     vols   : Owl_dense_ndarray_d.arr Cache.t; (** (1, n): per-atom excluded volume *)
     elms   : string array;   (** element symbol per atom. *)
     name   : string;         (** molecule name. *)
@@ -101,31 +108,37 @@ let angles_of_xyz
     let phi = Owl_dense_ndarray_d.atan2 y x in
     Owl_dense_ndarray_d.concatenate ~axis:0 [| theta; phi |]
 
-(** Per-atom excluded volume, from atomic/ionic radii looked up by
-    element symbol.
+(** Per-atom atomic/ionic radius, looked up by element symbol.
     @param elms element symbol per atom
-    @return (1, n)
+    @return (1, n), Angstrom
     @raise Molecule_error if [elms] is empty, or any element has no
     radius on file at all *)
-let compute_vols (elms : string array) : Owl_dense_ndarray_d.arr =
+let compute_radii (elms : string array) : Owl_dense_ndarray_d.arr =
     let n = Array.length elms in
     if n = 0 then
         raise (Molecule_error "Empty elements")
     else
         begin
-            let results = AV.get_vols elms in
+            let radii = Radii.lookup elms in
             let out = Owl_dense_ndarray_d.zeros [| 1; n |] in
             Array.iteri
-                (fun i (elem, result) ->
-                    match result with
-                    | Some (_, v) -> Owl_dense_ndarray_d.set out [| 0; i |] v
+                (fun i (elem, radius) ->
+                    match radius with
+                    | Some r -> Owl_dense_ndarray_d.set out [| 0; i |] r
                     | None ->
                         raise (Molecule_error (
-                            Printf.sprintf "no volume data for element %S" elem))
+                            Printf.sprintf "no radius data for element %S" elem))
                         )
-                results;
+                radii;
             out
         end
+
+(** Per-atom excluded volume, as the volume of a hard sphere of each
+    atom's radius.
+    @param radii per-atom radius, (1, n), from {!compute_radii}
+    @return (1, n), Angstrom^3 *)
+let compute_vols (radii : Owl_dense_ndarray_d.arr) : Owl_dense_ndarray_d.arr =
+    Owl_dense_ndarray_d.map sphere_volume radii
 
 let create
     (name : string) (elms : string array)
@@ -137,8 +150,11 @@ let create
         let x = row 0 coords and y = row 1 coords and z = row 2 coords in
         let r_cache = Cache.make (fun () -> radii_of_xyz x y z) in
         let a_cache = Cache.make (fun () -> angles_of_xyz x y z (Cache.force r_cache)) in
-        let vols_cache = Cache.make (fun () -> compute_vols elms) in
-        { angles = a_cache; r = r_cache; vols = vols_cache; elms; name }
+        let radii_cache = Cache.make (fun () -> compute_radii elms) in
+        let vols_cache =
+            Cache.make (fun () -> compute_vols (Cache.force radii_cache)) in
+        { coords; angles = a_cache; r = r_cache; radii = radii_cache;
+          vols = vols_cache; elms; name }
 
 (** Flatten a (1, n) row into a genuine 1-D (n,) array. *)
 let flatten_row (a : Owl_dense_ndarray_d.arr) : Owl_dense_ndarray_d.arr =
@@ -151,6 +167,10 @@ let phi (m : t) : Owl_dense_ndarray_d.arr =
     flatten_row (Owl_dense_ndarray_d.get_slice [[1]; []] (Cache.force m.angles))
 
 let r (m : t) : Owl_dense_ndarray_d.arr = flatten_row (Cache.force m.r)
+
+let coords (m : t) : Owl_dense_ndarray_d.arr = m.coords
+
+let radii (m : t) : Owl_dense_ndarray_d.arr = flatten_row (Cache.force m.radii)
 
 let vols (m : t) : Owl_dense_ndarray_d.arr = flatten_row (Cache.force m.vols)
 

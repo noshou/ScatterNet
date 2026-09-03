@@ -21,7 +21,9 @@ let () =
 let py_mod : Py.Object.t =
     (* absolute path, via Helpers.repo_root - not a cwd-relative string,
        since dune runtest's cwd differs from dune exec's *)
-    let dir = Filename.concat Helpers.repo_root "scattering/form_factor_xraydb" in
+    let dir =
+        Filename.concat Helpers.repo_root "scattering/modules/FormFactorXrayDB"
+    in
     let sys = Py.import "sys" in
     let path = Py.Module.get sys "path" in
     ignore (Py.Object.call_method path "insert"
@@ -32,7 +34,8 @@ let py_mod : Py.Object.t =
         Py.E (_, errvalue) ->
             raise (Form_factor_xraydb_error (
                 sprintf "failed to load FormFact_py.py (%s) - is python3's numpy/xraydb \
-                installed? Try: pip install -r form_factor_xraydb/requirements.txt"
+                installed? Try: pip install -r \
+                scattering/modules/FormFactorXrayDB/requirements.txt"
             (Py.Object.to_string errvalue)))
 
 (** Form factors for a batch of ions, one entry per unique ion.
