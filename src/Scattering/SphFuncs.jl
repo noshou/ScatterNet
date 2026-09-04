@@ -73,10 +73,13 @@ shape `(lMax+1, |q|, |r|)`.
 - `lMax`: maximum order, `lMax >= 0`.
 """
 function sphBess(r::AbstractArray{<:Real}, q::AbstractArray{<:Real}, lMax::Int)::Array{Float64,3}
+    
     isempty(r) && throw(SphBessError("radii must be non-empty"))
     isempty(q) && throw(SphBessError("q grid must be non-empty"))
+    
     any(<(0), r) && throw(SphBessError("radii must be >= 0"))
     any(<(0), q) && throw(SphBessError("q must be >= 0"))
+    
     lMax < 0 && throw(SphBessError("lMax must be >= 0"))
 
     rv, qv = vec(r), vec(q)
