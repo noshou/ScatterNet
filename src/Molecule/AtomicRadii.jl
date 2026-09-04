@@ -6,8 +6,8 @@ module AtomicRadii
 
 using SQLite: SQLite
 using DBInterface: DBInterface
-import ..Interfaces
-using ..Interfaces: RadiiSource
+import ...Interfaces
+using ...Interfaces: RadiiSource
 
 export Ion, tryparse_ion, ion_key, resolve_one, lookup, AtomicRadiiSource
 
