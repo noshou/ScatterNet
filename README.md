@@ -6,8 +6,8 @@
 src/
   ScatterNet.jl          thin aggregator (includes Interfaces + the two groups)
   Interfaces.jl          RadiiSource / FormFactorSource markers (shared)
-  Structure/
-    Structure.jl         module Structure
+  Molecule/
+    Molecule.jl          module Molecule
     Cache.jl             Lazy{T} + force
     AtomicRadii.jl       ion parsing + table (loaded once) + fallback chain
     Molecules.jl         create + r/theta/phi/coords/radii/vols/elms/name
@@ -24,9 +24,9 @@ test/                    test suites + Aqua/JET
 
 `src/ScatterNet.jl` includes `Interfaces` then two grouped submodules, each its
 own folder with a parent `module … end` that `include`s its files in dependency
-order: `Structure` (`Cache`, `AtomicRadii`, `Molecules`) and `Scattering`
+order: `Molecule` (`Cache`, `AtomicRadii`, `Molecules`) and `Scattering`
 (`SphFuncs`, `FormFactorXrayDB`). Reach a leaf as
-`ScatterNet.Structure.AtomicRadii` etc. `export` lists the public surface;
+`ScatterNet.Molecule.AtomicRadii` etc. `export` lists the public surface;
 `_`-prefixed names are internal. Swappable backends (`RadiiSource`,
 `FormFactorSource`) are abstract types + a documented method contract, in place
 of OCaml functors.
