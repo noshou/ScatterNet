@@ -9,6 +9,7 @@ using ...Interfaces: FormFactorSource
 
 export FF, FormFactorError, FormFactorSourceXrayDB, compute_form_factors
 
+"Raised on any failure building or querying form factors."
 struct FormFactorError <: Exception; msg::String end
 Base.showerror(io::IO, e::FormFactorError) = print(io, "FormFactorError: ", e.msg)
 
@@ -24,6 +25,12 @@ struct FormFactorSourceXrayDB <: FormFactorSource end
 
 const _PYMOD = Ref{Py}()
 
+"""
+    _pymod() -> Py
+
+Import and memoize the `FormFact_py` Python module, prepending the package `py/`
+dir to `sys.path` on first call. Throws [`FormFactorError`](@ref) if the import fails.
+"""
 function _pymod()::Py
     if !isassigned(_PYMOD)
         sys = pyimport("sys")
@@ -38,7 +45,17 @@ function _pymod()::Py
     return _PYMOD[]
 end
 
-"Form factors for a batch of ions at `energy` (eV) over `qvals` (Å⁻¹); one row per unique ion."
+"""
+    compute_form_factors(ions, energy::Real, qvals) -> FF
+
+Form factors for a batch of ions at one `energy` over a q grid; one row per unique
+ion, aligned to the returned container's q index.
+
+# Arguments
+- `ions`: vector of ion strings.
+- `energy`: photon energy in eV.
+- `qvals`: vector of q values in Å⁻¹.
+"""
 function compute_form_factors(
     ions::AbstractVector{<:AbstractString}, energy::Real,
     qvals::AbstractVector{<:Real}
@@ -64,7 +81,17 @@ function compute_form_factors(
     end
 end
 
-"Build a container for `ions` at one `energy` over a q grid."
+"""
+    create(energy::Real, ions, qvals) -> FF
+
+Build an [`FF`](@ref) container for `ions` at one `energy` (eV) over the `qvals`
+(Å⁻¹) grid. Thin wrapper over [`compute_form_factors`](@ref).
+
+# Arguments
+- `energy`: photon energy in eV.
+- `ions`: vector of ion strings.
+- `qvals`: vector of q values in Å⁻¹.
+"""
 create(energy::Real, ions, qvals)::FF =
     compute_form_factors(collect(String, ions), energy, collect(Float64, qvals))
 
@@ -72,10 +99,15 @@ create(energy::Real, ions, qvals)::FF =
 log(t::FF)::Vector{String} = t.log
 
 """
-    lookup(t, ions, qvals) -> Vector{Tuple{String,Vector{ComplexF64}}}
+    lookup(t::FF, ions, qvals) -> Vector{Tuple{String,Vector{ComplexF64}}}
 
-Rows for `ions` at `qvals`; ions with no data are dropped. Errors if a queried q
-is not one of `t`'s grid points (exact match).
+Rows for `ions` at `qvals`, drawn from container `t`; ions with no data are dropped.
+Throws [`FormFactorError`](@ref) if a queried q is not one of `t`'s grid points (exact match).
+
+# Arguments
+- `t`: form-factor container from [`create`](@ref) / [`compute_form_factors`](@ref).
+- `ions`: vector of ion strings to fetch.
+- `qvals`: vector of q values; each must match a grid point of `t` exactly.
 """
 function lookup(t::FF, ions::AbstractVector{<:AbstractString}, qvals::AbstractVector{<:Real})
     idx = Vector{Int}(undef, length(qvals))

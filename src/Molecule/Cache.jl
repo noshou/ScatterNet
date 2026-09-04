@@ -12,10 +12,25 @@ mutable struct Lazy{T}
     Lazy{T}(f) where {T} = new{T}(f, ReentrantLock(), false)
 end
 
-"Build an unforced cache of a `T`-valued thunk."
+"""
+    make(::Type{T}, f) -> Lazy{T}
+
+Build an unforced cache of the `T`-valued thunk `f`.
+
+# Arguments
+- `::Type{T}`: element type the thunk returns.
+- `f`: zero-arg thunk, run once on the first [`force`](@ref).
+"""
 make(::Type{T}, f) where {T} = Lazy{T}(f)
 
-"Force a cache: run the thunk once, then return the stored value on every call."
+"""
+    force(c::Lazy{T}) -> T
+
+Run `c`'s thunk once, under its lock, then return the stored value on every call.
+
+# Arguments
+- `c`: the cache to force.
+"""
 function force(c::Lazy{T})::T where {T}
     @lock c.lock begin
         if !c.done

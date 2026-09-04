@@ -11,9 +11,11 @@ using   ..AtomicRadii: AtomicRadiiSource
 export  Molecule, MoleculeError, create, r, theta, phi, 
         coords, radii, vols, elms, name
 
+"Raised for malformed molecule input (empty or mismatched coords, missing radii)."
 struct MoleculeError <: Exception; msg::String end
 Base.showerror(io::IO, e::MoleculeError) = print(io, "MoleculeError: ", e.msg)
 
+"Per-atom centered coords with eager `r`/`theta`/`phi` and lazy `radii`/`vols`."
 struct Molecule
     _name::String
     _elms::Vector{String}
@@ -25,8 +27,17 @@ struct Molecule
     _vols::Lazy{Vector{Float64}}
 end
 
+"Volume of a sphere of radius `rad`."
 sphere_volume(rad::Float64)::Float64 = (4.0 / 3.0) * pi * rad^3
 
+"""
+    _center(cs::Vector{NTuple{3,Float64}}) -> Matrix{Float64}
+
+Stack coordinates into a `(3, n)` matrix translated to the centroid.
+
+# Arguments
+- `cs`: per-atom `(x, y, z)` tuples; must be non-empty.
+"""
 function _center(cs::Vector{NTuple{3,Float64}})::Matrix{Float64}
     n = length(cs)
     n == 0 && throw(MoleculeError("Empty coordinates"))
@@ -46,6 +57,15 @@ end
 
 # theta = acos(z/r) in [0, π], phi = atan2(y, x). r = 0 (single atom) would give
 # 0/0, so clamp with rsafe; j_l(0) = 0 for l > 0 makes the angle irrelevant there.
+"""
+    _geometry(c::Matrix{Float64}) -> (Vector{Float64}, Vector{Float64}, Vector{Float64})
+
+Spherical `(r, theta, phi)` per column of `c`, with `theta = acos(z/r)` in
+`[0, π]` and `phi = atan(y, x)`. `r = 0` is handled without a `0/0`.
+
+# Arguments
+- `c`: `(3, n)` centered coordinate matrix.
+"""
 function _geometry(c::Matrix{Float64})
     n = size(c, 2)
     r = Vector{Float64}(undef, n); th = Vector{Float64}(undef, n); ph = Vector{Float64}(undef, n)
@@ -60,6 +80,16 @@ function _geometry(c::Matrix{Float64})
     return r, th, ph
 end
 
+"""
+    _compute_radii(src::RadiiSource, es::Vector{String}) -> Vector{Float64}
+
+Resolve per-element radii through `src`; throws `MoleculeError` on an empty list
+or any element with no radius data.
+
+# Arguments
+- `src`: radii backend to query.
+- `es`: element/ion strings, one per atom.
+"""
 function _compute_radii(src::S, es::Vector{String})::Vector{Float64} where {S<:RadiiSource}
     isempty(es) && throw(MoleculeError("Empty elements"))
     pairs = lookup(src, es)
@@ -72,6 +102,16 @@ function _compute_radii(src::S, es::Vector{String})::Vector{Float64} where {S<:R
     return out
 end
 
+"""
+    _to_tuples(cs) -> Vector{NTuple{3,Float64}}
+
+Normalize any iterable of 3-component coordinates to `Float64` tuples (identity
+when already `Vector{NTuple{3,Float64}}`). Throws `MoleculeError` if an entry
+lacks 3 components.
+
+# Arguments
+- `cs`: iterable of per-atom coordinates.
+"""
 _to_tuples(cs::Vector{NTuple{3,Float64}}) = cs
 function _to_tuples(cs)
     out = Vector{NTuple{3,Float64}}(undef, length(cs))
@@ -83,10 +123,18 @@ function _to_tuples(cs)
 end
 
 """
-    create(name, elms, coords; radii_source = AtomicRadiiSource()) -> Molecule
+    create(name, elms, coords; radii_source::RadiiSource = AtomicRadiiSource()) -> Molecule
 
-`coords` is per-atom `(x, y, z)` (any frame); it is centered at the centroid.
-`r`, `theta`, `phi` are computed now; `radii`, `vols` on first access.
+Build a `Molecule`: `coords` are centered at the centroid, `r`/`theta`/`phi`
+computed now, `radii`/`vols` on first access.
+
+# Arguments
+- `name`: molecule label.
+- `elms`: element/ion string per atom.
+- `coords`: per-atom `(x, y, z)` in any frame; length must match `elms`.
+
+# Keywords
+- `radii_source`: radii backend (defaults to `AtomicRadiiSource()`).
 """
 function create(name::AbstractString, elms::AbstractVector{<:AbstractString}, coords;
                 radii_source::RadiiSource = AtomicRadiiSource())
@@ -100,13 +148,21 @@ function create(name::AbstractString, elms::AbstractVector{<:AbstractString}, co
     return Molecule(String(name), es, c, rr, th, ph, rad, vol)
 end
 
+"Per-atom radial distance from the centroid."
 r(m::Molecule)::Vector{Float64}      = m._r
+"Per-atom polar angle `acos(z/r)` in `[0, π]`."
 theta(m::Molecule)::Vector{Float64}  = m._theta
+"Per-atom azimuth `atan(y, x)`."
 phi(m::Molecule)::Vector{Float64}    = m._phi
+"`(3, n)` centroid-centered coordinate matrix."
 coords(m::Molecule)::Matrix{Float64} = m._coords
+"Per-atom radius; resolved and cached on first call."
 radii(m::Molecule)::Vector{Float64}  = force(m._radii)
+"Per-atom sphere volume; computed and cached on first call."
 vols(m::Molecule)::Vector{Float64}   = force(m._vols)
+"Element/ion string per atom."
 elms(m::Molecule)::Vector{String}    = m._elms
+"Molecule label."
 name(m::Molecule)::String            = m._name
 
 end # module
