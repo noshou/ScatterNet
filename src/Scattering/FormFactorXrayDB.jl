@@ -5,7 +5,7 @@ package (via PythonCall). `py/FormFact_py.py` holds the tier logic.
 module FormFactorXrayDB
 
 using PythonCall: pyimport, pylist, pyconvert, Py
-using ..Interfaces: FormFactorSource
+using ...Interfaces: FormFactorSource
 
 export FF, FormFactorError, FormFactorSourceXrayDB, compute_form_factors
 

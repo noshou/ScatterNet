@@ -44,7 +44,7 @@ needs incremental extension.
 
 ## Adaptive refinement
 
-Idea: atoms need unequal accuracy. Buried and 
+Idea: atoms need unequal accuracy. Buried and
 atoms converge at tiny N; only occlusion-boundary atoms (mid-range f, error
 ~ sqrt(f(1-f)/N)) need many points. Start small per atom, extend only the
 ambiguous ones, reusing points via the R2 sequence.

@@ -5,7 +5,7 @@ A molecule: per-atom coordinates centered at the centroid, with `r`, `theta`,
 module  Molecules
 
 using   ..Cache: Lazy, force
-using   ..Interfaces: RadiiSource, lookup
+using   ...Interfaces: RadiiSource, lookup
 using   ..AtomicRadii: AtomicRadiiSource
 
 export  Molecule, MoleculeError, create, r, theta, phi, 
