@@ -1,0 +1,14 @@
+name = "ScatterNetVisualize"
+authors = ["noshou"]
+
+[deps]
+DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+ScatterNet = "f10a6c88-74b5-485f-9c8c-589f8f9e3c2a"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[compat]
+GLMakie = "0.13.14"
+julia = "1.10"
