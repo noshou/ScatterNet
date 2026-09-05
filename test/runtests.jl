@@ -1,12 +1,14 @@
 using Test
+using PythonCall     # loads FormFactorXrayDBExt, the xraydb backend
 using ScatterNet
 using ScatterNet: Interfaces
-using ScatterNet.Molecule: Cache, AtomicRadii, Molecules
+using ScatterNet.Constants: DEFAULT_ATOL
+using ScatterNet.Molecule: Molecules
+using ScatterNet.Molecule.SASA: PlasticMap
 using ScatterNet.Scattering: SphFuncs, FormFactorXrayDB
-using ScatterNet.SASA: PlasticMap
 
-check_float(a, b) = abs(a - b) < 1e-9
-check_complex(a, b) = abs(a - b) < 1e-9
+check_float(a, b; atol = DEFAULT_ATOL) = abs(a - b) < atol
+check_complex(a, b; atol = DEFAULT_ATOL) = abs(a - b) < atol
 
 @testset "ScatterNet" begin
     include("test_cache.jl")
@@ -15,5 +17,6 @@ check_complex(a, b) = abs(a - b) < 1e-9
     include("test_sphfuncs.jl")
     include("test_formfactor.jl")
     include("test_plasticmap.jl")
+    include("test_sasa.jl")
     include("test_quality.jl")
 end
