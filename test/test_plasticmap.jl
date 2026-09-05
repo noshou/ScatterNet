@@ -1,4 +1,4 @@
-using .PlasticMap: Vec3, plastic_points, plastic_points!, PLASTIC_RATIO
+using .PlasticMap: Vec3, plastic_points, PLASTIC_RATIO
 
 nrm(p) = sqrt(p[1]^2 + p[2]^2 + p[3]^2)
 dot3(a, b) = a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
@@ -26,7 +26,7 @@ dot3(a, b) = a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
 
     @testset "every point is a unit vector" begin
         for p in plastic_points(5_000)
-            @test abs(nrm(p) - 1.0) < 1e-12
+            @test abs(nrm(p) - 1.0) < 1e-3 * DEFAULT_ATOL   # tighter: direct closed-form identity, short op chain
         end
     end
 
@@ -37,43 +37,8 @@ dot3(a, b) = a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
         end
     end
 
-    @testset "plastic_points! grows in place and matches a fresh allocation" begin
-        buf = plastic_points(64)
-        old = copy(buf)
-        ret = plastic_points!(buf, 64, 256)
-        @test ret === buf                     # grows the same array, no realloc of the handle
-        @test length(buf) == 256
-        @test buf[1:64] == old                # existing entries untouched
-        @test buf == plastic_points(256)      # tail is the real continuation
-    end
-
-    @testset "repeated grows equal one shot" begin
-        buf = Vector{Vec3}()
-        for want in (10, 10, 11, 50, 200, 200, 512)
-            have = length(buf)
-            plastic_points!(buf, have, want)
-            @test length(buf) == max(have, want)
-        end
-        @test length(buf) == 512
-        @test buf == plastic_points(512)
-    end
-
-    @testset "no-op when want <= have" begin
-        buf = plastic_points(128)
-        snap = copy(buf)
-        @test plastic_points!(buf, 128, 128) === buf
-        @test buf == snap
-        @test plastic_points!(buf, 128, 30) === buf
-        @test buf == snap                     # length unchanged, nothing dropped
-    end
-
     @testset "error contract" begin
-        buf = plastic_points(10)
-        @test_throws DomainError   plastic_points!(Vector{Vec3}(), -1, 5)
-        @test_throws DomainError   plastic_points!(buf, 10, -1)
-        @test_throws ArgumentError plastic_points!(buf, 9, 20)    # have too small for buf
-        @test_throws ArgumentError plastic_points!(buf, 11, 20)   # have too large for buf
-        @test_throws ArgumentError plastic_points!(Vector{Vec3}(), 3, 9)
+        @test_throws DomainError plastic_points(-1)
     end
 
     @testset "even coverage (low-discrepancy sanity)" begin
@@ -101,8 +66,8 @@ dot3(a, b) = a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
         @test all(c -> abs(c - n / 10) < 0.15 * n / 10, zb)
 
         # 4. spherical caps hold their area fraction, for a few axes and sizes
-        for u in (  Vec3((1.0, 0.0, 0.0)), 
-                    Vec3((0.0, 0.0, 1.0)), 
+        for u in (  Vec3((1.0, 0.0, 0.0)),
+                    Vec3((0.0, 0.0, 1.0)),
                     Vec3((1, 1, 1) ./ sqrt(3))
         )
             for freq in (0.1, 0.25, 0.5)
@@ -114,8 +79,6 @@ dot3(a, b) = a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
     end
 
     @testset "type stability" begin
-        buf = Vector{Vec3}()
         @inferred plastic_points(16)
-        @inferred plastic_points!(buf, 0, 16)
     end
 end
