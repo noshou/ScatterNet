@@ -14,7 +14,7 @@ struct SphBessError <: Exception; msg::String end
 Base.showerror(io::IO, e::SphHarmError) = print(io, "SphHarmError: ", e.msg)
 Base.showerror(io::IO, e::SphBessError) = print(io, "SphBessError: ", e.msg)
 
-const _INV_SQRT_2PI = 1.0 / sqrt(2.0 * pi)
+const _INV_SQRT_2PI = 1.0 / sqrt(2.0 * π)
 
 """
     legendre_sphPlm(l::Integer, m::Integer, x::Real) -> Float64
