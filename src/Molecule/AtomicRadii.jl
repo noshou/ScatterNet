@@ -1,15 +1,7 @@
-"""
-Atomic/ionic radii: parse an ion string, then resolve its radius through a
-fallback chain over the bundled `atomic_radii.sqlite3` (loaded once into `Dict`s).
-"""
-module AtomicRadii
-
-using SQLite: SQLite
-using DBInterface: DBInterface
-import ...Interfaces
-using ...Interfaces: RadiiSource
-
-export Ion, tryparse_ion, ion_key, resolve_one, lookup, AtomicRadiiSource
+# Atomic/ionic radii: parse an ion string, then resolve its radius through a
+# fallback chain over the bundled `atomic_radii.sqlite3` (loaded once into
+# `Dict`s). Molecules.jl brings in SQLite, DBInterface, and Interfaces
+# (module + RadiiSource) before `include`-ing this file.
 
 # ---- ion string -> (element, signed charge) -------------------------------
 
@@ -19,8 +11,8 @@ struct Ion
     charge::Int
 end
 
-# element = 1-2 lowercase; magnitude has a non-zero leading digit (no charge 0);
-# a bare sign means +/-1.
+# element = 1-2 lowercase; magnitude has a non-zero 
+# leading digit (no charge 0); a bare sign means +/-1.
 const _ION_RE = r"^\s*([a-z]{1,2})\s*(?:([1-9][0-9]*)\s*([+-])|([+-])\s*([1-9][0-9]*)?)?\s*$"
 
 """
@@ -156,15 +148,21 @@ struct _Miss end
 const _MISS = _Miss()
 
 """
-    lookup(ions::AbstractVector{<:AbstractString}) -> Vector{Tuple{String,Union{Float64,Nothing}}}
+    _resolve_all(ions::AbstractVector{<:AbstractString}) -> Vector{Tuple{String,Union{Float64,Nothing}}}
 
 Batch [`resolve_one`](@ref); input order and count preserved, repeats deduped
 per call. Each entry pairs the input string with its radius (Å) or `nothing`.
 
+Named apart from `Interfaces.lookup` (rather than reusing that name here, the
+way the old separate `AtomicRadii` module could) so that extending it below
+stays a normal method addition on our own `AtomicRadiiSource`, not type piracy
+on a foreign function over only foreign (`AbstractVector`/`AbstractString`)
+types.
+
 # Arguments
 - `ions`: ion/element strings to resolve.
 """
-function lookup(ions::AbstractVector{<:AbstractString})
+function _resolve_all(ions::AbstractVector{<:AbstractString})
     cache = Dict{String,Union{Float64,Nothing}}()
     out = Vector{Tuple{String,Union{Float64,Nothing}}}(undef, length(ions))
     @inbounds for i in eachindex(ions)
@@ -177,8 +175,6 @@ function lookup(ions::AbstractVector{<:AbstractString})
     return out
 end
 
-"Concrete [`Interfaces.RadiiSource`](@ref) backed by [`lookup`](@ref)."
+"Concrete [`Interfaces.RadiiSource`](@ref) backed by [`_resolve_all`](@ref)."
 struct AtomicRadiiSource <: RadiiSource end
-Interfaces.lookup(::AtomicRadiiSource, ions::AbstractVector{<:AbstractString}) = lookup(ions)
-
-end # module
+Interfaces.lookup(::AtomicRadiiSource, ions::AbstractVector{<:AbstractString}) = _resolve_all(ions)

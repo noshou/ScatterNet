@@ -1,34 +1,51 @@
 """
-A molecule: per-atom coordinates centered at the centroid, with `r`, `theta`,
-`phi` computed eagerly and `radii`, `vols` lazily.
+A molecule: per-atom coordinates centered at the centroid, held in both
+cartesian and spherical form (computed eagerly), with `radii`, `vols` and
+`r_max` lazily.
+
+Lazy memoization (`Lazy`/`make`/`force`) and the default radii backend
+(`Ion`/`resolve_one`/`AtomicRadiiSource`/...) are spliced directly into this
+module from `Cache.jl`/`AtomicRadii.jl` rather than living in their own
+submodules -- nothing outside `Molecules` uses either, so there's no
+separate module identity worth keeping (Julia has no true private scoping;
+not exporting these names is as close as it gets).
 """
 module  Molecules
 
-using   ..Cache: Lazy, force
+import  ...Interfaces
 using   ...Interfaces: RadiiSource, lookup
-using   ..AtomicRadii: AtomicRadiiSource
+using   SQLite: SQLite
+using   DBInterface: DBInterface
 
-export  Molecule, MoleculeError, create, r, theta, phi, 
-        coords, radii, vols, elms, name
+include("Cache.jl")
+include("AtomicRadii.jl")
+
+export  Molecule, MoleculeError, create, coords_cartesian, coords_spherical,
+        radii, vols, r_max, elms, name
 
 "Raised for malformed molecule input (empty or mismatched coords, missing radii)."
 struct MoleculeError <: Exception; msg::String end
 Base.showerror(io::IO, e::MoleculeError) = print(io, "MoleculeError: ", e.msg)
 
-"Per-atom centered coords with eager `r`/`theta`/`phi` and lazy `radii`/`vols`."
+"""
+Per-atom centered coordinates in both frames, with lazy `radii`/`vols`/`r_max`.
+
+Both coordinate frames are `(3, n)` matrices sharing a column index (the atom),
+so a single atom's data is one contiguous column in either frame; the spherical
+rows are `r`, `theta`, `phi` in that order.
+"""
 struct Molecule
-    _name::String
-    _elms::Vector{String}
-    _coords::Matrix{Float64}          # (3, n) centered
-    _r::Vector{Float64}               # (n,)
-    _theta::Vector{Float64}           # (n,)
-    _phi::Vector{Float64}             # (n,)
-    _radii::Lazy{Vector{Float64}}
-    _vols::Lazy{Vector{Float64}}
+    _name   :: String
+    _elms   :: Vector{String}
+    _cart   :: Matrix{Float64}       # (3, n) centered (x, y, z)
+    _sph    :: Matrix{Float64}       # (3, n) (r, theta, phi)
+    _radii  :: Lazy{Vector{Float64}}
+    _vols   :: Lazy{Vector{Float64}}
+    _r_max  :: Lazy{Float64}         # largest per-atom radius
 end
 
 "Volume of a sphere of radius `rad`."
-sphere_volume(rad::Float64)::Float64 = (4.0 / 3.0) * pi * rad^3
+sphere_volume(rad::Float64)::Float64 = (4.0 / 3.0) * π * rad^3
 
 """
     _center(cs::Vector{NTuple{3,Float64}}) -> Matrix{Float64}
@@ -58,26 +75,27 @@ end
 # theta = acos(z/r) in [0, π], phi = atan2(y, x). r = 0 (single atom) would give
 # 0/0, so clamp with rsafe; j_l(0) = 0 for l > 0 makes the angle irrelevant there.
 """
-    _geometry(c::Matrix{Float64}) -> (Vector{Float64}, Vector{Float64}, Vector{Float64})
+    _geometry(c::Matrix{Float64}) -> Matrix{Float64}
 
-Spherical `(r, theta, phi)` per column of `c`, with `theta = acos(z/r)` in
-`[0, π]` and `phi = atan(y, x)`. `r = 0` is handled without a `0/0`.
+Spherical `(r, theta, phi)` per column of `c` as a `(3, n)` matrix, with
+`theta = acos(z/r)` in `[0, π]` and `phi = atan(y, x)`. `r = 0` is handled
+without a `0/0`.
 
 # Arguments
 - `c`: `(3, n)` centered coordinate matrix.
 """
-function _geometry(c::Matrix{Float64})
+function _geometry(c::Matrix{Float64})::Matrix{Float64}
     n = size(c, 2)
-    r = Vector{Float64}(undef, n); th = Vector{Float64}(undef, n); ph = Vector{Float64}(undef, n)
+    out = Matrix{Float64}(undef, 3, n)
     @inbounds for j in 1:n
         x = c[1, j]; y = c[2, j]; z = c[3, j]
         rj = sqrt(x * x + y * y + z * z)
-        r[j] = rj
         rsafe = rj > 0.0 ? rj : 1.0
-        th[j] = acos(clamp(z / rsafe, -1.0, 1.0))
-        ph[j] = atan(y, x)
+        out[1, j] = rj
+        out[2, j] = acos(clamp(z / rsafe, -1.0, 1.0))
+        out[3, j] = atan(y, x)
     end
-    return r, th, ph
+    return out
 end
 
 """
@@ -85,6 +103,16 @@ end
 
 Resolve per-element radii through `src`; throws `MoleculeError` on an empty list
 or any element with no radius data.
+
+A negative radius is clamped to `0.0`. Shannon's tables carry a handful of
+these (`h1+`, `c4+`, `n5+`) as extrapolation artifacts of fitting to
+coordination-number trends, not as physical sizes. Clamping keeps the
+downstream invariants that actually matter -- non-negative volumes, and an
+expanded SASA radius `r + probe` that never inverts -- and a bare proton with
+no electron density around it is, for scattering purposes, exactly the
+zero-radius object the clamp makes it. These ions are rare enough in practice
+that anything relying on them is not stable input for scattering analysis
+regardless.
 
 # Arguments
 - `src`: radii backend to query.
@@ -97,7 +125,7 @@ function _compute_radii(src::S, es::Vector{String})::Vector{Float64} where {S<:R
     @inbounds for i in eachindex(pairs)
         el, rad = pairs[i]
         rad === nothing && throw(MoleculeError("no radius data for element \"$el\""))
-        out[i] = rad
+        out[i] = max(0.0, rad)   # negative table entries are artifacts; see above
     end
     return out
 end
@@ -125,8 +153,8 @@ end
 """
     create(name, elms, coords; radii_source::RadiiSource = AtomicRadiiSource()) -> Molecule
 
-Build a `Molecule`: `coords` are centered at the centroid, `r`/`theta`/`phi`
-computed now, `radii`/`vols` on first access.
+Build a `Molecule`: `coords` are centered at the centroid, both coordinate
+frames computed now, `radii`/`vols`/`r_max` on first access.
 
 # Arguments
 - `name`: molecule label.
@@ -141,27 +169,37 @@ function create(name::AbstractString, elms::AbstractVector{<:AbstractString}, co
     cs = _to_tuples(coords)
     length(cs) == length(elms) || throw(MoleculeError("coords and elms length mismatch"))
     es = collect(String, elms)
-    c = _center(cs)
-    rr, th, ph = _geometry(c)
-    rad = Lazy{Vector{Float64}}(() -> _compute_radii(radii_source, es))
-    vol = Lazy{Vector{Float64}}(() -> sphere_volume.(force(rad)))
-    return Molecule(String(name), es, c, rr, th, ph, rad, vol)
+    cart = _center(cs)
+    sph  = _geometry(cart)
+    rad  = Lazy{Vector{Float64}}(() -> _compute_radii(radii_source, es))
+    vol  = Lazy{Vector{Float64}}(() -> sphere_volume.(force(rad)))
+    rmax = Lazy{Float64}(() -> maximum(force(rad)))
+    return Molecule(String(name), es, cart, sph, rad, vol, rmax)
 end
 
-"Per-atom radial distance from the centroid."
-r(m::Molecule)::Vector{Float64}      = m._r
-"Per-atom polar angle `acos(z/r)` in `[0, π]`."
-theta(m::Molecule)::Vector{Float64}  = m._theta
-"Per-atom azimuth `atan(y, x)`."
-phi(m::Molecule)::Vector{Float64}    = m._phi
-"`(3, n)` centroid-centered coordinate matrix."
-coords(m::Molecule)::Matrix{Float64} = m._coords
+"`(3, n)` centroid-centered cartesian coordinates; rows are `x`, `y`, `z`."
+coords_cartesian(m::Molecule)::Matrix{Float64} = m._cart
+
+"`(3, n)` spherical coordinates about the centroid; rows are `r`, `theta`, `phi`."
+coords_spherical(m::Molecule)::Matrix{Float64} = m._sph
+
 "Per-atom radius; resolved and cached on first call."
 radii(m::Molecule)::Vector{Float64}  = force(m._radii)
+
 "Per-atom sphere volume; computed and cached on first call."
 vols(m::Molecule)::Vector{Float64}   = force(m._vols)
+
+"""
+Largest per-atom radius in the molecule; forces (and caches) `radii`.
+
+SASA's coarse neighbour filter needs this to bound how far away an atom can
+still occlude another, before any individual radius is known.
+"""
+r_max(m::Molecule)::Float64          = force(m._r_max)
+
 "Element/ion string per atom."
 elms(m::Molecule)::Vector{String}    = m._elms
+
 "Molecule label."
 name(m::Molecule)::String            = m._name
 
