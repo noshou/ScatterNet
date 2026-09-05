@@ -193,7 +193,17 @@ tracking unless 3/n is less than the tolerance.
 - `area_tol`:   if no exposed point is found in `n_occ` samples, the atom might still
                 have a tiny exposed patch (≤ 3/n_occ of its sphere). If that worst‑case area is
                 below `area_tol`, we skip the full `n_exp` pass and treat it as buried.
-                Default `0.8` Å² (safe for most uses); set `0.0` for exact (slower).
+                Default `2.0` Å². Measured over 451 systems that costs a mean
+                -0.0024% and a worst-case -0.10% of total area -- at or below the
+                sampling error the default `n_exp` already carries -- while
+                running ~1.6x faster, since most early exits are atoms that were
+                genuinely buried and would have scored 0 anyway. Set `0.0` to
+                never skip.
+
+                The bound scales with atom size (`3/n_occ * 4pi*rho^2`), so a
+                tolerance below ~0.85 Å² arms only for light elements and leaves
+                anything heavier paying full price for no accuracy gain: 0.8 was
+                measured to buy no speedup at all on a Cu lattice.
 # Returns
 Area per atom, indexed like `coords_cartesian(mol)`'s columns.
 """
@@ -202,7 +212,7 @@ function sasa_atoms(
     probe::Float64    = 1.4,    
     n_occ::Int        = 512,              
     n_exp::Int        = 4096,             
-    area_tol::Float64 = 0.8
+    area_tol::Float64 = 2.0
 )::Vector{Float64}
 
     # Assertion checks

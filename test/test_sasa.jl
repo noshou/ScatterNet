@@ -273,7 +273,7 @@ end
         m = sasa_mol(["q", "q"], [(0.0, 0.0, 0.0), (3.0, 0.0, 0.0)])
 
         # a bare call == spelling every default out explicitly
-        ref = sasa_atoms(m; probe = 1.4, n_occ = 512, n_exp = 4096, area_tol = 0.8)
+        ref = sasa_atoms(m; probe = 1.4, n_occ = 512, n_exp = 4096, area_tol = 2.0)
         @test sasa_atoms(m) == ref
         @test sasa(m) == sum(ref)
         @test sasa(m) isa Float64
