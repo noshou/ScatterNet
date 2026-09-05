@@ -1,11 +1,13 @@
 [deps]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
-GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
+CondaPkg = "992eb4ea-22a4-4c89-a5bb-47a3300528ab"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 ScatterNet = "f10a6c88-74b5-485f-9c8c-589f8f9e3c2a"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
 Aqua = "0.8"
-GLMakie = "0.13.14"
 JET = "0.9, 0.10, 0.11, 0.12"

@@ -1,10 +1,14 @@
 """
 X-ray form factors `f(q,E) = f0(s) + f1(E) + i f2(E)` from the Python `xraydb`
-package (via PythonCall). `py/FormFact_py.py` holds the tier logic.
+package. `py/FormFact_py.py` holds the tier logic.
+
+Everything here is pure Julia; the one function that actually crosses into
+Python, [`compute_form_factors`](@ref), is supplied by the `FormFactorXrayDBExt`
+package extension and only exists once `PythonCall` is loaded. Consumers that
+just want the scattering geometry therefore never pull in a Python stack.
 """
 module FormFactorXrayDB
 
-using PythonCall: pyimport, pylist, pyconvert, Py
 using ...Interfaces: FormFactorSource
 
 export FF, FormFactorError, FormFactorSourceXrayDB, compute_form_factors
@@ -23,63 +27,26 @@ end
 "Marker for the xraydb backend (single implementation of [`Interfaces.FormFactorSource`](@ref))."
 struct FormFactorSourceXrayDB <: FormFactorSource end
 
-const _PYMOD = Ref{Py}()
-
-"""
-    _pymod() -> Py
-
-Import and memoize the `FormFact_py` Python module, prepending the package `py/`
-dir to `sys.path` on first call. Throws [`FormFactorError`](@ref) if the import fails.
-"""
-function _pymod()::Py
-    if !isassigned(_PYMOD)
-        sys = pyimport("sys")
-        d = pkgdir(@__MODULE__, "py")
-        d ∉ sys.path && sys.path.insert(0, d)
-        try
-            _PYMOD[] = pyimport("FormFact_py")
-        catch e
-            throw(FormFactorError("cannot import FormFact_py ($e); build the CondaPkg env"))
-        end
-    end
-    return _PYMOD[]
-end
-
 """
     compute_form_factors(ions, energy::Real, qvals) -> FF
 
-Form factors for a batch of ions at one `energy` over a q grid; one row per unique
-ion, aligned to the returned container's q index.
+Form factors for a batch of ions at one `energy` over a q grid; one row per
+unique ion, aligned to the returned container's q index.
+
+Implemented by the `FormFactorXrayDBExt` extension, which loads with
+`PythonCall`. Without it this catch-all method is the only one defined and it
+raises [`FormFactorError`](@ref) -- it is deliberately less specific than the
+extension's typed method, so the real implementation wins on dispatch without
+redefining anything.
 
 # Arguments
 - `ions`: vector of ion strings.
 - `energy`: photon energy in eV.
 - `qvals`: vector of q values in Å⁻¹.
 """
-function compute_form_factors(
-    ions::AbstractVector{<:AbstractString}, energy::Real,
-    qvals::AbstractVector{<:Real}
-)::FF
-    qs = collect(Float64, qvals)
-    np = pyimport("numpy")
-    try
-        res = _pymod().compute_form_factors(pylist(collect(String, ions)), Float64(energy),
-                                            np.asarray(qs; dtype = np.float64))
-        tbl = Dict{String,Vector{ComplexF64}}()
-        for kv in res[0]
-            tbl[pyconvert(String, kv[0])] = pyconvert(Vector{ComplexF64}, kv[1])
-        end
-        log_lines = pyconvert(Vector{String}, res[1])
-        qmp = Dict{Float64,Int}()
-        @inbounds for i in eachindex(qs)
-            qmp[qs[i]] = i
-        end
-        return FF(tbl, qmp, log_lines)
-    catch e
-        e isa FormFactorError && rethrow()
-        throw(FormFactorError("compute_form_factors failed ($e)"))
-    end
-end
+compute_form_factors(args...) = throw(FormFactorError(
+    "the xraydb backend is not loaded; run `using PythonCall` to activate the " *
+    "FormFactorXrayDBExt extension (and make sure PythonCall is in your environment)"))
 
 """
     create(energy::Real, ions, qvals) -> FF
