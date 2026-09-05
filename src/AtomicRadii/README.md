@@ -37,24 +37,24 @@ CREATE TABLE atomic_radii (
 
 118 rows: every ground state element, Z=1 through Z=118.
 
-`radius_type`: van der Waals, metallic, and covalent radii  are three different physical quantities (covalent radii in particular run  30–70% smaller than van der Waals radii for the same element). 
+`radius_type`: van der Waals, metallic, and covalent radii  are three different physical quantities (covalent radii in particular run  30–70% smaller than van der Waals radii for the same element).
 
 
-| `radius_type` | Elements                                                                      | Count |
-| --------------- | ------------------------------------------------------------------------------- | ------- |
-| `vdw`         | Main group: H–Ra/Fr/Rn (groups 1, 2, 13–18)                                 | 44    |
-| `metallic`    | Transition metals Sc–Hg (minus Rf–Cn), lanthanides La–Lu, actinides Ac–Am | 51    |
-| `covalent`    | Actinides Cm–Lr, transactinides/superheavies Rf–Og                          | 23    |
+| `radius_type` | Elements                                                                        | Count |
+| --------------- | --------------------------------------------------------------------------------- | ------- |
+| `vdw`         | Alvarez-covered elements (H–Es, minus Po/At/Fr/Ra), plus Po/At/Fr/Ra (Mantina) | 98    |
+| `metallic`    | Pm (no Alvarez data; Teatum 1968 fallback)                                      | 1     |
+| `covalent`    | Fm–Lr, transactinides/superheavies Rf–Og (no Alvarez data)                    | 19    |
 
 ### Sources
 
 
-| Citation                                                                                                                                                                                                                 | DOI / identifier              | `radius_type` | Elements                                                                                                                      |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Mantina, M.; Chamberlin, A.C.; Valero, R.; Cramer, C.J.; Truhlar, D.G. (2009). Consistent van der Waals Radii for the Whole Main Group.*J. Phys. Chem. A* 113, 5806–5812.                                               | `10.1021/jp8111556`           | `vdw`         | 43 main-group elements, H–Ra/Fr (all except Rn)                                                                              |
-| Runeberg, N.; Pyykkö, P. (1998). Relativistic pseudopotential calculations on Xe2, RnXe, and Rn2: the van der Waals properties of radon.*Int. J. Quantum Chem.* 66, 131–140.                                           | (pre-DOI; see journal record) | `vdw`         | Runeberg & Pyykkö's 2.24 Å comes from a direct relativistic coupled-cluster calculation on Rn2 rather than an interpolation |
-| Teatum, E.T.; Gschneidner, K.A. Jr.; Waber, J.T. (1968). Compilation of Calculated Data Useful in Predicting Metallurgical Behavior of the Elements in Binary Alloy Systems.*LA-4003*, Los Alamos Scientific Laboratory. | (LASL report; no DOI)         | `metallic`    | 51 elements: transition metals Sc–Hg (minus Rf–Cn, undiscovered in 1968), lanthanides La–Lu, actinides Ac–Am              |
-| Pyykkö, P.; Atsumi, M. (2009). Molecular Single-Bond Covalent Radii for Elements 1–118.*Chem. Eur. J.* 15, 186–197.                                                                                                   | `10.1002/chem.200800987`      | `covalent`    | 23 elements: actinides Cm–Lr and transactinides/superheavies Rf–Og                                                          |
+| Citation                                                                                                                                                                                                                 | DOI / identifier         | `radius_type` | Elements                                                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | --------------- | --------------------------------------------------------------------------------------------------------- |
+| Alvarez, S. (2013). A cartography of the van der Waals territories.*Dalton Trans.* 42, 8617–8636.                                                                                                                       | `10.1039/c3dt50599e`     | `vdw`         | 94 elements: main group, transition metals, and lanthanides/actinides through Es (minus Po, At, Fr, Ra) |
+| Mantina, M.; Chamberlin, A.C.; Valero, R.; Cramer, C.J.; Truhlar, D.G. (2009). Consistent van der Waals Radii for the Whole Main Group.*J. Phys. Chem. A* 113, 5806–5812.                                               | `10.1021/jp8111556`      | `vdw`         | Po, At, Fr, Ra — no Alvarez data                                                                       |
+| Teatum, E.T.; Gschneidner, K.A. Jr.; Waber, J.T. (1968). Compilation of Calculated Data Useful in Predicting Metallurgical Behavior of the Elements in Binary Alloy Systems.*LA-4003*, Los Alamos Scientific Laboratory. | (LASL report; no DOI)    | `metallic`    | Pm — no Alvarez data                                                                                   |
+| Pyykkö, P.; Atsumi, M. (2009). Molecular Single-Bond Covalent Radii for Elements 1–118.*Chem. Eur. J.* 15, 186–197.                                                                                                   | `10.1002/chem.200800987` | `covalent`    | 19 elements: Fm–Lr and transactinides/superheavies Rf–Og — no Alvarez data                           |
 
 ## **`element_charges`**
 

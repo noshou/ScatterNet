@@ -2,7 +2,8 @@ using Test
 using PythonCall     # loads FormFactorXrayDBExt, the xraydb backend
 using ScatterNet
 using ScatterNet: Interfaces
-using ScatterNet.Constants: DEFAULT_ATOL
+using ScatterNet.ABSOLUTE_TOLERANCE: DEFAULT_ATOL
+using ScatterNet: AtomicRadii
 using ScatterNet.Molecule: Molecules
 using ScatterNet.Molecule.SASA: PlasticMap
 using ScatterNet.Scattering: SphFuncs, FormFactorXrayDB

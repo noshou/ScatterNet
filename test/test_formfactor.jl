@@ -2,8 +2,7 @@
 # the FormFactorXrayDBExt package extension, which loads with PythonCall
 # (`runtests.jl` does `using PythonCall` for exactly that reason). Needs the
 # CondaPkg env (numpy + xraydb); the set is skipped, loudly, if unavailable.
-using .FormFactorXrayDB: compute_form_factors, FF, FormFactorError,
-                         FormFactorSourceXrayDB
+using .FormFactorXrayDB: compute_form_factors, FF, FormFactorError, FormFactorSourceXrayDB
 const F = FormFactorXrayDB
 
 const _available = try
@@ -27,8 +26,7 @@ qgrid = [0.0, 0.1, 0.5, 1.0]
         # catch-all stub, which throws -- and `_available` would quietly turn
         # every assertion below into a skip.
         @test Base.get_extension(ScatterNet, :FormFactorXrayDBExt) !== nothing
-        m = only(methods(compute_form_factors,
-                         (Vector{String}, Float64, Vector{Float64})))
+        m = only(methods(compute_form_factors, (Vector{String}, Float64, Vector{Float64})))
         @test parentmodule(m) === Base.get_extension(ScatterNet, :FormFactorXrayDBExt)
         @test _available          # the backend really answered
     end
@@ -61,8 +59,7 @@ qgrid = [0.0, 0.1, 0.5, 1.0]
             @test all(v -> v isa Vector{ComplexF64}, values(t.tbl))
             @test t.qmp == Dict(q => i for (i, q) in enumerate(qgrid))  # q => column index
             @test F.log(t) isa Vector{String}
-            @test F.create(8000.0, ["fe3+"], qvals).tbl ==
-                  compute_form_factors(["fe3+"], 8000.0, qvals).tbl   # create is a thin wrapper
+            @test F.create(8000.0, ["fe3+"], qvals).tbl == compute_form_factors(["fe3+"], 8000.0, qvals).tbl   # create is a thin wrapper
         end
 
         @testset "f0 carries all the q dependence; f1/f2 carry none" begin
@@ -126,8 +123,7 @@ qgrid = [0.0, 0.1, 0.5, 1.0]
 
         @testset "lookup preserves the query's ion order" begin
             t = F.create(8000.0, ["fe3+", "o2-", "h"], qvals)
-            @test [i for (i, _) in F.lookup(t, ["h", "fe3+", "o2-"], qvals)] ==
-                  ["h", "fe3+", "o2-"]
+            @test [i for (i, _) in F.lookup(t, ["h", "fe3+", "o2-"], qvals)] == ["h", "fe3+", "o2-"]
             @test [i for (i, _) in F.lookup(t, ["o2-", "h"], qvals)] == ["o2-", "h"]
         end
 

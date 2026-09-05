@@ -19,7 +19,7 @@ Per atom i:
   place N points at center_i + Ri * unit_sphere_point
   point is buried if within Rj of any neighbor j
   f_i = (# non-buried) / N
-  SASA_i = f_i * 4*pi*Ri^2
+  SASA_i = f_i * 4*π*Ri^2
 Neighbor j of i if dist(i,j) < Ri + Rj. Cell-list/grid for O(N).
 
 ## Point distribution
@@ -53,10 +53,10 @@ Guards:
 
 - Classify with a confidence bound, not the point estimate: with k exposed of
   n, k=0 still allows true f up to ~3/n (rule of three). Reject as buried only
-  if f_upper * 4*pi*Ri^2 < area_tol. n_min ~ 50-100 keeps this safe.
+  if f_upper * 4*π*Ri^2 < area_tol. n_min ~ 50-100 keeps this safe.
 - Free pre-filter from neighbor list: if no neighbor reaches Ri's surface
   (dist(i,j) >= Ri + Rj for all j) then f_i = 1 exactly, no sampling.
-- Stop boundary atoms when SE(f) = sqrt(f(1-f)/n), times 4*pi*Ri^2, < tol,
+- Stop boundary atoms when SE(f) = sqrt(f(1-f)/n), times 4*π*Ri^2, < tol,
   or n hits n_cap (~960). Double n each round (64 -> 128 -> 256 ...).
 - Scope: "reject buried" applies ONLY to SASA / shell. Excluded-volume term
   C(q) still uses every atom's full volume. Buried atom -> zero surface points;
@@ -76,12 +76,12 @@ Pseudocode:
             add next block of points (n -> 2n) from R2 sequence
             k += count(points in block not inside any neighbor_i)
             f = k / n
-            if f_upper(k, n) * 4*pi*Ri^2 < area_tol:
+            if f_upper(k, n) * 4*π*Ri^2 < area_tol:
                 f_i = 0; break                           # buried
-            if SE(f, n) * 4*pi*Ri^2 < tol or n >= n_cap:
+            if SE(f, n) * 4*π*Ri^2 < tol or n >= n_cap:
                 f_i = f; break                           # converged
 
-        SASA_i = f_i * 4*pi*Ri^2
+        SASA_i = f_i * 4*π*Ri^2
         # keep surviving (non-buried) points for hydration-shell placement
 
 ## Codebase hooks

@@ -1,24 +1,13 @@
 """
-A molecule: per-atom coordinates centered at the centroid, held in both
-cartesian and spherical form (computed eagerly), with `radii`, `vols` and
-`r_max` lazily.
-
-Lazy memoization (`Lazy`/`make`/`force`) and the default radii backend
-(`Ion`/`resolve_one`/`AtomicRadiiSource`/...) are spliced directly into this
-module from `Cache.jl`/`AtomicRadii.jl` rather than living in their own
-submodules -- nothing outside `Molecules` uses either, so there's no
-separate module identity worth keeping (Julia has no true private scoping;
-not exporting these names is as close as it gets).
+A molecule.
 """
 module  Molecules
 
 import  ...Interfaces
 using   ...Interfaces: RadiiSource, lookup
-using   SQLite: SQLite
-using   DBInterface: DBInterface
+using   ...AtomicRadii: AtomicRadiiSource
 
 include("Cache.jl")
-include("AtomicRadii.jl")
 
 export  Molecule, MoleculeError, create, coords_cartesian, coords_spherical,
         radii, vols, r_max, elms, name
@@ -106,13 +95,7 @@ or any element with no radius data.
 
 A negative radius is clamped to `0.0`. Shannon's tables carry a handful of
 these (`h1+`, `c4+`, `n5+`) as extrapolation artifacts of fitting to
-coordination-number trends, not as physical sizes. Clamping keeps the
-downstream invariants that actually matter -- non-negative volumes, and an
-expanded SASA radius `r + probe` that never inverts -- and a bare proton with
-no electron density around it is, for scattering purposes, exactly the
-zero-radius object the clamp makes it. These ions are rare enough in practice
-that anything relying on them is not stable input for scattering analysis
-regardless.
+coordination-number trends, not as physical sizes.
 
 # Arguments
 - `src`: radii backend to query.

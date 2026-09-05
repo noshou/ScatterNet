@@ -7,12 +7,12 @@
 # database.
 #
 # Run with:
-#   julia --project=visualize -e 'include("test/tools/sasa_vis.jl"); vis_sasa_cases()'
-#   julia --project=visualize -e 'include("test/tools/sasa_vis.jl"); vis_sasa_mesh_convergence()'
-#   julia --project=visualize -e 'include("test/tools/sasa_vis.jl"); vis_sasa_molecule(cluster_scene().mol)'
+#   julia --project=visualize -e 'include("visualize/sasa_vis.jl"); vis_sasa_cases()'
+#   julia --project=visualize -e 'include("visualize/sasa_vis.jl"); vis_sasa_mesh_convergence()'
+#   julia --project=visualize -e 'include("visualize/sasa_vis.jl"); vis_sasa_molecule(cluster_scene().mol)'
 #
 # Numbers only, no window (works headless):
-#   julia --project=visualize -e 'include("test/tools/sasa_vis.jl"); sasa_scene_report()'
+#   julia --project=visualize -e 'include("visualize/sasa_vis.jl"); sasa_scene_report()'
 
 using ScatterNet
 using ScatterNet.Interfaces: Interfaces, RadiiSource
@@ -65,16 +65,16 @@ directions mapped onto the expanded sphere of radius `radii(mol)[i] + probe`,
 each tested with `SASA._occluded` against every other atom.
 
 The demo scenes are tiny, so the full index list is passed as the candidate set
-instead of replicating `sasa_atoms`' KD-tree range query; `i` is passed as
+instead of replicating `sasa`'s KD-tree range query; `i` is passed as
 `self` so the atom never occludes its own points.
 
-This deliberately samples *every* atom, including the ones `sasa_atoms` would
+This deliberately samples *every* atom, including the ones `sasa` would
 never sample: `SASA._classify` resolves the fully-exposed and fully-engulfed
 regimes exactly from the neighbour list, and those atoms reach no point loop at
 all in the real code. Sampling them anyway is what makes the pictures worth
 looking at -- you can see the state the exact predicate inferred. `status`
-reports which path `sasa_atoms` actually took, so a panel can say so, and
-`area` still agrees with `sasa_atoms(mol; n_occ = n, n_exp = n, probe = probe)[i]` in every case.
+reports which path `sasa` actually took, so a panel can say so, and
+`area` still agrees with `sasa(mol; n_occ = n, n_exp = n, probe = probe)[1][i]` in every case.
 
 # Arguments
 - `mol`: molecule to sample.
@@ -228,7 +228,7 @@ sasa_scenes(; probe::Float64 = 1.4) =
     classification_label(status) -> String
 
 Human-readable name for a [`SASA._classify`](@ref) verdict, noting whether
-`sasa_atoms` samples that atom or settles it exactly from the neighbour list.
+`sasa` samples that atom or settles it exactly from the neighbour list.
 """
 classification_label(status::SASA.Coverage) =
     status == SASA.ALL_EXPOSED ?    "exact: no neighbour reaches it" :
@@ -247,10 +247,10 @@ function sasa_scene_report(;n::Int = 512, probe::Float64 = 1.4,
                             ns = (64, 256, 1024, 4096))
     for sc in sasa_scenes(; probe)
         println(sc.title, "  (probe = ", probe, ", n = ", n, ")")
-        areas = SASA.sasa_atoms(sc.mol; n_occ = n, n_exp = n, probe = probe)
+        areas = SASA.sasa(sc.mol; n_occ = n, n_exp = n, probe = probe)[1]
         for i in sc.focus
             st = atom_point_states(sc.mol, i, n, probe)
-            @printf("  atom %d: exposed %4d/%4d  frac %.4f  area %8.3f  (sasa_atoms %8.3f)  [%s]\n",
+            @printf("  atom %d: exposed %4d/%4d  frac %.4f  area %8.3f  (sasa %8.3f)  [%s]\n",
                     i, st.n_exposed, st.n_total, st.frac, st.area, areas[i],
                     classification_label(st.status))
         end
@@ -369,7 +369,7 @@ function sasa_cases_figure(; n::Int = 512, probe::Float64 = 1.4)
         extra = haskey(sc, :analytic_frac) ?
                 @sprintf(   "\nanalytic cap fraction %.4f  (error %+.4f)",
                             sc.analytic_frac, n_exp / n_tot - sc.analytic_frac) : ""
-        # say which branch sasa_atoms takes: the points shown are illustrative
+        # say which branch sasa takes: the points shown are illustrative
         # for the two regimes the exact pre-filter resolves without sampling.
         paths = unique(classification_label(s.status) for s in sts)
         extra *= "\n" * join(paths, " + ")
@@ -447,7 +447,7 @@ and a noisy fraction, fine meshes converge on the analytic value
 [`two_sphere_exposed_area`](@ref). Each panel is annotated with `n`, the measured
 exposed fraction and the signed error against that exact value.
 
-This is the picture behind `sasa_atoms`' two-pass split: a handful of points is
+This is the picture behind `sasa`'s two-pass split: a handful of points is
 already enough to answer "is this atom buried at all?" (the `n_occ` pass), while
 a fraction accurate to a percent needs an order of magnitude more (the `n_exp`
 pass). Blocks until the window is closed.
@@ -473,7 +473,7 @@ function sasa_molecule_figure(
     n_exp::Int = 1024,
     probe::Float64 = 1.4
 )
-    areas = SASA.sasa_atoms(mol; n_occ = n_occ, n_exp = n_exp, probe = probe)
+    areas = SASA.sasa(mol; n_occ = n_occ, n_exp = n_exp, probe = probe)[1]
     crds = Molecules.coords_cartesian(mol)
     rads = Molecules.radii(mol)
     lo, hi = extrema(areas)
@@ -503,7 +503,7 @@ end
     vis_sasa_molecule(mol; n_occ = 128, n_exp = 1024, probe = 1.4) -> Nothing
 
 Colour a whole molecule's atoms by their per-atom area from
-`SASA.sasa_atoms`: each atom is drawn as a sphere at its expanded radius
+`SASA.sasa`: each atom is drawn as a sphere at its expanded radius
 `r + probe`, tinted from buried (dark) to fully exposed (bright), with a
 colourbar in absolute Å². Blocks until the window is closed.
 

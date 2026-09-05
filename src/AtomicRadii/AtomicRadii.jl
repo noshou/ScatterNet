@@ -1,7 +1,16 @@
-# Atomic/ionic radii: parse an ion string, then resolve its radius through a
-# fallback chain over the bundled `atomic_radii.sqlite3` (loaded once into
-# `Dict`s). Molecules.jl brings in SQLite, DBInterface, and Interfaces
-# (module + RadiiSource) before `include`-ing this file.
+"""
+Atomic/ionic radii: parse an ion string, then resolve its radius through a
+fallback chain over the bundled `atomic_radii.sqlite3` (loaded once into
+`Dict`s). Independent of `Molecule`.
+"""
+module AtomicRadii
+
+import ..Interfaces
+using  ..Interfaces: RadiiSource
+using  SQLite: SQLite
+using  DBInterface: DBInterface
+
+export AtomicRadiiSource, Ion, tryparse_ion, ion_key, ion_radius, element_radius, nearest_ion, resolve_one
 
 # ---- ion string -> (element, signed charge) -------------------------------
 
@@ -55,8 +64,8 @@ const _IONIC   = Dict{String,Float64}()               # "fe3+" => radius Å
 const _ATOMIC  = Dict{String,Tuple{Float64,String}}() # "fe"   => (radius Å, type)
 const _CHARGES = Dict{String,Vector{Int}}()           # "fe"   => sorted charges
 
-"Absolute path to the bundled `atomic_radii.sqlite3`."
-_dbpath()::String = joinpath(pkgdir(@__MODULE__)::String, "data", "atomic_radii.sqlite3")
+"Absolute path to the bundled `atomic_radii.sqlite3`, next to this file."
+_dbpath()::String = joinpath(@__DIR__, "atomic_radii.sqlite3")
 
 """
     _load!(path::String = _dbpath()) -> Nothing
@@ -153,11 +162,9 @@ const _MISS = _Miss()
 Batch [`resolve_one`](@ref); input order and count preserved, repeats deduped
 per call. Each entry pairs the input string with its radius (Å) or `nothing`.
 
-Named apart from `Interfaces.lookup` (rather than reusing that name here, the
-way the old separate `AtomicRadii` module could) so that extending it below
-stays a normal method addition on our own `AtomicRadiiSource`, not type piracy
-on a foreign function over only foreign (`AbstractVector`/`AbstractString`)
-types.
+Named apart from `Interfaces.lookup` so that this plain function stays
+independent of any particular `RadiiSource`; the `Interfaces.lookup` method
+below is a thin wrapper over it for `AtomicRadiiSource` specifically.
 
 # Arguments
 - `ions`: ion/element strings to resolve.
@@ -178,3 +185,5 @@ end
 "Concrete [`Interfaces.RadiiSource`](@ref) backed by [`_resolve_all`](@ref)."
 struct AtomicRadiiSource <: RadiiSource end
 Interfaces.lookup(::AtomicRadiiSource, ions::AbstractVector{<:AbstractString}) = _resolve_all(ions)
+
+end # module AtomicRadii

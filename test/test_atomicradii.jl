@@ -1,7 +1,6 @@
-# Exercises src/Molecule/AtomicRadii.jl: ion-string parsing, the ion_key
+# Exercises src/AtomicRadii/AtomicRadii.jl: ion-string parsing, the ion_key
 # round-trip, the raw table lookups, and the resolve_one fallback chain.
-using .Molecules: Ion, tryparse_ion, ion_key, ion_radius, element_radius,
-                  nearest_ion, resolve_one, _resolve_all, AtomicRadiiSource
+using .AtomicRadii: Ion, tryparse_ion, ion_key, ion_radius, element_radius, nearest_ion, resolve_one, _resolve_all, AtomicRadiiSource
 
 lookup_one(ion) = _resolve_all([ion])[1][2]
 
@@ -75,7 +74,7 @@ lookup_one(ion) = _resolve_all([ion])[1][2]
         @test ion_radius("qq9+") === nothing
         er = element_radius("fe")
         @test er isa Tuple{Float64,String}
-        @test check_float(er[1], 1.274) && er[2] == "metallic"
+        @test check_float(er[1], 2.44) && er[2] == "vdw"
         @test element_radius("o")[2] == "vdw"
         @test element_radius("qq") === nothing
     end
@@ -112,15 +111,15 @@ lookup_one(ion) = _resolve_all([ion])[1][2]
     @testset "resolve_one, step 3: bare-element fallback for a parsed ion" begin
         # rn parses as an ion but has no ionic entry and no charge states at all,
         # so the only rung left is atomic_radii
-        @test check_float(resolve_one("rn3+"), 2.24)
+        @test check_float(resolve_one("rn3+"), 2.4)
         @test check_float(resolve_one("rn3+"), element_radius("rn")[1])
         @test check_float(resolve_one("ne1+"), element_radius("ne")[1])
     end
 
     @testset "resolve_one: unparseable strings go straight to the bare table" begin
-        @test check_float(1.274, resolve_one("fe"))
-        @test check_float(2.24,  resolve_one("rn"))
-        @test check_float(1.1,   resolve_one("h"))
+        @test check_float(2.44, resolve_one("fe"))
+        @test check_float(2.4,  resolve_one("rn"))
+        @test check_float(1.2,  resolve_one("h"))
         @test resolve_one("Fe")   === nothing   # unparseable AND not a table key
         @test resolve_one("fe!!") === nothing
     end

@@ -1,5 +1,5 @@
 using ScatterNet: Interfaces
-using ScatterNet.Molecule.SASA: SASA, sasa, sasa_atoms, _occluded
+using ScatterNet.Molecule.SASA: SASA, sasa, _occluded
 using .Molecules: create
 
 # ---------------------------------------------------------------------------
@@ -36,11 +36,17 @@ const SASA_SRC = SasaTestRadii(Dict(
 
 sasa_mol(elms, crds) = create("sasa-test", elms, crds; radii_source = SASA_SRC)
 
+"Per-atom area from `sasa`; the other three return values are covered separately below."
+sasa_atoms(mol; kwargs...) = sasa(mol; kwargs...)[1]
+
+"Total solvent-accessible surface area of `mol`: the sum of its per-atom areas."
+sasa_total(mol; kwargs...) = sum(sasa_atoms(mol; kwargs...))
+
 "Analytic area of a lone expanded sphere: 4π(r + probe)²."
 sasa_full(r, probe) = 4π * (r + probe)^2
 
 """
-Exposed area of one of two EQUAL spheres of expanded radius ρ whose centers are
+Exposed area of one of two equal spheres of expanded radius ρ whose centers are
 `d` apart (0 < d < 2ρ): the occluded part is a spherical cap of area
 `2πρ(ρ - d/2)`, so the exposed part is `4πρ² - 2πρ(ρ - d/2)`.
 """
@@ -60,22 +66,17 @@ end
     @testset "argument contract" begin
         m = sasa_mol(["q", "q"], [(0.0, 0.0, 0.0), (4.0, 0.0, 0.0)])
 
-        @test_throws DomainError sasa_atoms(m; n_occ = 0, n_exp = 100, probe = 1.4)
-        @test_throws DomainError sasa_atoms(m; n_occ = -5, n_exp = 100, probe = 1.4)
-        @test_throws DomainError sasa_atoms(m; n_occ = 10, n_exp = 0, probe = 1.4)
-        @test_throws DomainError sasa_atoms(m; n_occ = 10, n_exp = -1, probe = 1.4)
-        @test_throws DomainError sasa_atoms(m; n_occ = 100, n_exp = 10, probe = 1.4)      # n_exp < n_occ
-        @test_throws DomainError sasa_atoms(m; n_occ = 10, n_exp = 100, probe = -1e-9)    # negative probe
-
-        # same checks reach through the `sasa` wrapper
         @test_throws DomainError sasa(m; n_occ = 0, n_exp = 100, probe = 1.4)
-        @test_throws DomainError sasa(m; n_occ = 100, n_exp = 10, probe = 1.4)
-        @test_throws DomainError sasa(m; n_occ = 10, n_exp = 100, probe = -1.0)
+        @test_throws DomainError sasa(m; n_occ = -5, n_exp = 100, probe = 1.4)
+        @test_throws DomainError sasa(m; n_occ = 10, n_exp = 0, probe = 1.4)
+        @test_throws DomainError sasa(m; n_occ = 10, n_exp = -1, probe = 1.4)
+        @test_throws DomainError sasa(m; n_occ = 100, n_exp = 10, probe = 1.4)      # n_exp < n_occ
+        @test_throws DomainError sasa(m; n_occ = 10, n_exp = 100, probe = -1e-9)    # negative probe
 
         # boundary cases that MUST be legal
-        @test sasa(m; n_occ = 100, n_exp = 100, probe = 1.4) > 0.0        # n_occ == n_exp
-        @test sasa(m; n_occ = 1, n_exp = 1, probe = 1.4) > 0.0            # smallest legal counts
-        @test sasa(m; n_occ = 10, n_exp = 100, probe = 0.0) > 0.0         # probe == 0 is legal
+        @test sasa_total(m; n_occ = 100, n_exp = 100, probe = 1.4) > 0.0        # n_occ == n_exp
+        @test sasa_total(m; n_occ = 1, n_exp = 1, probe = 1.4) > 0.0            # smallest legal counts
+        @test sasa_total(m; n_occ = 10, n_exp = 100, probe = 0.0) > 0.0         # probe == 0 is legal
     end
 
     @testset "single isolated atom is analytically exact" begin
@@ -86,7 +87,7 @@ end
             m = sasa_mol([el], [(3.0, -2.0, 7.0)])   # centering puts it at the origin
             for probe in (0.0, 1.4, 2.5)
                 for (n_occ, n_exp) in ((1, 1), (1, 100), (10, 100), (77, 1000), (250, 250))
-                    @test sasa(m; n_occ = n_occ, n_exp = n_exp, probe = probe) == sasa_full(r, probe)
+                    @test sasa_total(m; n_occ = n_occ, n_exp = n_exp, probe = probe) == sasa_full(r, probe)
                 end
             end
         end
@@ -98,12 +99,12 @@ end
         areas = sasa_atoms(m; n_occ = 20, n_exp = 1000, probe = probe)
         @test areas[1] == sasa_full(1.0, probe)
         @test areas[2] == sasa_full(2.0, probe)
-        @test sasa(m; n_occ = 20, n_exp = 1000, probe = probe) == sasa_full(1.0, probe) + sasa_full(2.0, probe)
+        @test sasa_total(m; n_occ = 20, n_exp = 1000, probe = probe) == sasa_full(1.0, probe) + sasa_full(2.0, probe)
 
         # exactly touching-but-not-overlapping expanded spheres:
         # ρ₁ + ρ₂ = 2.4 + 3.4 = 5.8, centers 6.0 apart -> still fully exposed.
         m2 = sasa_mol(["a", "b"], [(0.0, 0.0, 0.0), (6.0, 0.0, 0.0)])
-        @test sasa(m2; n_occ = 20, n_exp = 1000, probe = probe) == sasa_full(1.0, probe) + sasa_full(2.0, probe)
+        @test sasa_total(m2; n_occ = 20, n_exp = 1000, probe = probe) == sasa_full(1.0, probe) + sasa_full(2.0, probe)
     end
 
     @testset "complete engulfment: inner atom is exactly zero" begin
@@ -118,7 +119,7 @@ end
             areas = sasa_atoms(m; n_occ = n_occ, n_exp = n_exp, probe = probe)
             @test areas[2] == 0.0                       # engulfed: EXACTLY zero
             @test areas[1] == sasa_full(5.0, probe)     # host: full analytic area
-            @test sasa(m; n_occ = n_occ, n_exp = n_exp, probe = probe) == sasa_full(5.0, probe)
+            @test sasa_total(m; n_occ = n_occ, n_exp = n_exp, probe = probe) == sasa_full(5.0, probe)
         end
 
         # concentric variant (d = 0) with strictly different radii is the same
@@ -132,14 +133,11 @@ end
     @testset "coincident identical atoms are exactly zero" begin
         # Two atoms with the SAME center and the SAME radius. Every sample point
         # of atom i sits at distance exactly ρ from atom j's center, and the
-        # sampled test `dst² <= ρ_c²` is exactly on its boundary there -- so
-        # when this went through point sampling it leaked 3-15% of the points
-        # either way depending on rounding in `ρ*u` and the sum of squares.
+        # sampled test `dst² <= ρ_c²` is exactly on its boundary there.
         #
-        # `_classify` now decides it before any point is generated: d = 0 and
+        # `_classify`  decides it before any point is generated: d = 0 and
         # ρᵢ = ρⱼ satisfies `d + ρᵢ <= ρⱼ`, so each atom is engulfed by the
-        # other and both are exactly 0. The knife edge is gone, not hidden, so
-        # this asserts the exact value at every point count.
+        # other and both are exactly 0.
         probe = 1.4
         for n_exp in (1, 100, 500, 2000, 10000)
             areas = sasa_atoms(sasa_mol(
@@ -178,14 +176,12 @@ end
     end
 
     @testset "analytic spherical cap (strongest correctness check)" begin
-        # Two EQUAL spheres, expanded radius ρ = 2.9, centers d apart with
+        # Two equal spheres, expanded radius ρ = 2.9, centers d apart with
         # 0 < d < 2ρ. Each atom's exposed area is 4πρ² - 2πρ(ρ - d/2) exactly.
         #
-        # Tolerance: relative, empirically tuned. With n_exp = 40_000 the
-        # measured worst relative error over these eight separations was
-        # 3.12e-4 (typical ~1e-4). 1% therefore leaves ~30x headroom, which is
-        # what a quasi-random (non-i.i.d., so not variance-bounded) point set
-        # warrants -- tight enough that a real bias of even a percent fails.
+        # Tolerance: With n_exp = 40_000 the  measured worst relative error over these 
+        # eight separations was  3.12e-4 (typical ~1e-4). 1% therefore leaves ~30x headroom, 
+        # which is what a quasi-random (non-i.i.d., so not variance-bounded) point set warrants.
         probe = 1.4
         ρ = 1.5 + probe
         rtol = 0.01
@@ -227,9 +223,9 @@ end
 
     @testset "n_occ invariance (coarse pass is a prefix of the fine pass)" begin
         # `n_occ` only gates the buried early-exit; its points are the first
-        # `n_occ` terms of the SAME plastic sequence the fine pass reuses. So
+        # `n_occ` terms of the same plastic sequence the fine pass reuses. So
         # for a molecule with no buried atom, varying n_occ at fixed n_exp must
-        # give the IDENTICAL answer, bit for bit.
+        # give the identical answer, bit for bit.
         probe = 1.4
 
         m3 = sasa_mol(["q", "q", "q"], [(0.0, 0.0, 0.0), (3.0, 0.0, 0.0), (1.5, 2.5, 0.0)])
@@ -247,12 +243,10 @@ end
     end
 
     @testset "regression: a small n_occ can no longer bury an exposed atom" begin
-        # A finite sample can PROVE exposure (one unoccluded point is a witness)
-        # but can never prove burial. This trimer's third atom is genuinely
-        # exposed, and at n_occ = 1 its single coarse point happens to land
-        # occluded -- which used to zero the atom outright. The rule-of-three
-        # demotion means an unwitnessed atom is now confirmed against the full
-        # n_exp set instead, so the answer no longer depends on n_occ at all.
+        # A finite sample can prove exposure but can never prove burial. 
+        # The third atom is genuinely exposed, and at n_occ = 1 its single 
+        # coarse point happens to land The rule-of-three demotion means an 
+        # unwitnessed atom is now confirmed against the full n_exp set instead.
         probe = 1.4
         m = sasa_mol(["q", "q", "q"], [(0.0, 0.0, 0.0), (3.0, 0.0, 0.0), (1.5, 2.5, 0.0)])
         ref = sasa_atoms(m; n_occ = 64, n_exp = 2000, probe = probe)
@@ -275,8 +269,8 @@ end
         # a bare call == spelling every default out explicitly
         ref = sasa_atoms(m; probe = 1.4, n_occ = 512, n_exp = 4096, area_tol = 2.0)
         @test sasa_atoms(m) == ref
-        @test sasa(m) == sum(ref)
-        @test sasa(m) isa Float64
+        @test sasa_total(m) == sum(ref)
+        @test sasa_total(m) isa Float64
         @test sasa_atoms(m) isa Vector{Float64}
         @test length(sasa_atoms(m)) == 2
 
@@ -285,12 +279,12 @@ end
         @test sasa_atoms(m; n_exp = 512) != ref
 
         # a lone atom is still exact through the default path
-        @test sasa(sasa_mol(["q"], [(0.0, 0.0, 0.0)])) == sasa_full(1.5, 1.4)
+        @test sasa_total(sasa_mol(["q"], [(0.0, 0.0, 0.0)])) == sasa_full(1.5, 1.4)
     end
 
     @testset "the default n_exp is accurate enough to not be the limiting error" begin
         # The default must land the sampled answer within ~0.1% of the analytic
-        # cap -- an order of magnitude under the ~1.3% a 0.05 A radius shift
+        # cap, an order of magnitude under the ~1.3% a 0.05 A radius shift
         # already costs, so refining the mesh further chases noise the radius
         # table cannot justify.
         probe = 1.4
@@ -306,8 +300,7 @@ end
 
     @testset "exact pre-filter: the two decidable regimes need no sampling" begin
         # `_classify` settles these from the neighbour list alone, so the answer
-        # is exact at ANY point count -- n_exp = 1 is enough. Sampling could not
-        # produce these numbers reliably.
+        # is exact at any point count.
         probe = 1.4
 
         # no neighbour reaches the surface -> exactly 4πρ², fully exposed
@@ -335,8 +328,7 @@ end
         # Every sample point of atom i lies at exactly rads[i] + probe from atom
         # i's own center, so an occlusion test that did not skip `self` would
         # report `dst² <= ρ_self²` for every point of every atom and `sasa`
-        # would return 0.0 for EVERY molecule. `_occluded`'s `self` argument is
-        # the guard; these assertions fail loudly if it is ever dropped.
+        # would return 0.0 for every molecule. 
         probe = 1.4
         for m in (
             sasa_mol(["q"], [(0.0, 0.0, 0.0)]),
@@ -344,12 +336,12 @@ end
             sasa_mol(["q", "q", "q"], [(0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (1.0, 1.7, 0.0)]),
             sasa_mol(fill("q", 27), sasa_cube(3, 2.0)),
         )
-            @test sasa(m; n_occ = 50, n_exp = 1000, probe = probe) > 0.0
+            @test sasa_total(m; n_occ = 50, n_exp = 1000, probe = probe) > 0.0
             @test any(>(0.0), sasa_atoms(m; n_occ = 50, n_exp = 1000, probe = probe))
         end
     end
 
-    @testset "sasa == sum(sasa_atoms)" begin
+    @testset "sasa total == sum(sasa area)" begin
         probe = 1.4
         configs = (
             sasa_mol(["a"], [(0.0, 0.0, 0.0)]),
@@ -360,11 +352,11 @@ end
             sasa_mol(fill("q", 27), sasa_cube(3, 2.0)),
         )
         for m in configs, (n_occ, n_exp) in ((1, 200), (32, 1500), (100, 100))
-            @test sasa(m; n_occ = n_occ, n_exp = n_exp, probe = probe) === sum(sasa_atoms(m; n_occ = n_occ, n_exp = n_exp, probe = probe))
+            @test sasa_total(m; n_occ = n_occ, n_exp = n_exp, probe = probe) === sum(sasa_atoms(m; n_occ = n_occ, n_exp = n_exp, probe = probe))
         end
     end
 
-    @testset "sasa_atoms: shape, type, and per-atom bounds" begin
+    @testset "sasa: shape, type, and per-atom bounds" begin
         probe = 1.4
         elms = ["q", "a", "b", "c", "d"]
         crds = [(0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 3.5, 0.0),
@@ -380,7 +372,7 @@ end
             @test areas[i] >= 0.0
             @test areas[i] <= sasa_full(r, probe)   # can never exceed a full sphere
         end
-        @test sasa(m; n_occ = 40, n_exp = 1200, probe = probe) >= 0.0
+        @test sasa_total(m; n_occ = 40, n_exp = 1200, probe = probe) >= 0.0
     end
 
     @testset "determinism (quasi-random, not random)" begin
@@ -390,7 +382,7 @@ end
         for _ in 1:3
             @test sasa_atoms(m; n_occ = 32, n_exp = 1500, probe = probe) == a       # bit-identical
         end
-        @test sasa(m; n_occ = 32, n_exp = 1500, probe = probe) === sasa(m; n_occ = 32, n_exp = 1500, probe = probe)
+        @test sasa_total(m; n_occ = 32, n_exp = 1500, probe = probe) === sasa_total(m; n_occ = 32, n_exp = 1500, probe = probe)
 
         # a freshly-built but geometrically identical molecule agrees too
         m2 = sasa_mol(["q", "a", "b", "c"], [(0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 3.0, 0.0), (1.0, 1.0, 1.0)])
@@ -399,9 +391,9 @@ end
 
     @testset "probe scaling on a lone atom is exactly (r + probe)²" begin
         m = sasa_mol(["a"], [(1.0, 2.0, 3.0)])         # r = 1.0
-        v0 = sasa(m; n_occ = 10, n_exp = 100, probe = 0.0)
-        v1 = sasa(m; n_occ = 10, n_exp = 100, probe = 1.5)
-        v2 = sasa(m; n_occ = 10, n_exp = 100, probe = 4.0)
+        v0 = sasa_total(m; n_occ = 10, n_exp = 100, probe = 0.0)
+        v1 = sasa_total(m; n_occ = 10, n_exp = 100, probe = 1.5)
+        v2 = sasa_total(m; n_occ = 10, n_exp = 100, probe = 4.0)
         @test v0 == sasa_full(1.0, 0.0)
         @test v1 / v0 == (2.5 / 1.0)^2
         @test v2 / v0 == (5.0 / 1.0)^2
@@ -452,7 +444,7 @@ end
         # centre atom in direction u is occluded by the axial neighbour ê iff
         # u·ê >= a/(2ρ) = 0.345; over the six axial neighbours the worst-case
         # direction (1,1,1)/√3 still achieves 0.577 > 0.345, so the centre atom
-        # is provably occluded in EVERY direction -> exactly 0 for any n_exp.
+        # is provably occluded in every direction -> exactly 0 for any n_exp.
         probe = 1.4
         r = 1.5
         crds = sasa_cube(3, 2.0)
@@ -465,7 +457,7 @@ end
         @test all(>=(0.0), areas)
         @test all(a -> a <= sasa_full(r, probe), areas)
         @test 0.0 < total < iso
-        @test total == sasa(m; n_occ = 50, n_exp = 1000, probe = probe)
+        @test total == sasa_total(m; n_occ = 50, n_exp = 1000, probe = probe)
 
         # index of (i, j, k) in sasa_cube(3, ·): k varies fastest
         idx(i, j, k) = 9i + 3j + k + 1
@@ -473,7 +465,7 @@ end
         corners = [idx(i, j, k) for i in (0, 2), j in (0, 2), k in (0, 2)]
         faces   = [idx(1, 1, 0), idx(1, 1, 2), idx(1, 0, 1), idx(1, 2, 1), idx(0, 1, 1), idx(2, 1, 1)]
 
-        # the fully engulfed interior atom is EXACTLY zero
+        # the fully engulfed interior atom is exactly zero
         @test areas[centre] == 0.0
         # this must be robust to the point count
         for n_exp in (200, 1000, 4000)
@@ -496,9 +488,40 @@ end
         @test 0.05 < total / iso < 0.5
 
         # loosening the lattice raises the total; tightening it lowers it
-        loose = sasa(sasa_mol(fill("q", 27), sasa_cube(3, 3.0)); n_occ = 50, n_exp = 1000, probe = probe)
-        tight = sasa(sasa_mol(fill("q", 27), sasa_cube(3, 1.5)); n_occ = 50, n_exp = 1000, probe = probe)
+        loose = sasa_total(sasa_mol(fill("q", 27), sasa_cube(3, 3.0)); n_occ = 50, n_exp = 1000, probe = probe)
+        tight = sasa_total(sasa_mol(fill("q", 27), sasa_cube(3, 1.5)); n_occ = 50, n_exp = 1000, probe = probe)
         @test tight < total < loose < iso
+    end
+
+    @testset "patch geometry: centroid and patch_rg2" begin
+        # A lone atom's accessible patch is the whole sphere: the centroid
+        # collapses to (very nearly) the atom's own position, since the
+        # plastic point set is close to symmetric about its own mean, and
+        # patch_rg2 is (very nearly) ρ² exactly (see `_unit_patch_moments`).
+        probe = 1.4
+        r = 1.5
+        ρ = r + probe
+        m = sasa_mol(["q"], [(3.0, -2.0, 7.0)])
+        area, centroid, patch_rg2, exposed = sasa(m; n_exp = 4096)
+
+        @test exposed == [true]
+        @test area[1] == sasa_full(r, probe)
+        @test isapprox(centroid[:, 1], [0.0, 0.0, 0.0]; atol = 1e-2)   # centred molecule
+        @test isapprox(patch_rg2[1], ρ^2; atol = 1e-4)   # discretisation of the finite point set
+
+        # A fully engulfed atom's centroid falls back to its own position and
+        # patch_rg2 is exactly zero: there is no accessible patch to place a
+        # dummy on.
+        mc = sasa_mol(["a", "b"], [(0.0, 0.0, 0.0), (0.0, 0.0, 0.0)])
+        _, cen_c, rg2_c, exp_c = sasa(mc; n_exp = 4096, probe = 1.4)
+        @test exp_c[1] == false
+        @test rg2_c[1] == 0.0
+        @test cen_c[:, 1] == Molecules.coords_cartesian(mc)[:, 1]
+
+        # Consistency: sasa's own area matches the wrapper built on it.
+        m2 = sasa_mol(["q", "q"], [(0.0, 0.0, 0.0), (2.0, 0.0, 0.0)])
+        area2, _, _, _ = sasa(m2; n_occ = 32, n_exp = 1500, probe = probe)
+        @test area2 == sasa_atoms(m2; n_occ = 32, n_exp = 1500, probe = probe)
     end
 
     @testset "PlasticMap is reachable through SASA" begin

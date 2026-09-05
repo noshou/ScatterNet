@@ -13,6 +13,7 @@ deps/deps.jl
 
 # Local agent instructions
 CLAUDE.md
+.claude/
 
 # Python (py/FormFact_py.py is the only Python; env is managed by CondaPkg)
 __pycache__/

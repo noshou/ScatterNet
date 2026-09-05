@@ -2,8 +2,12 @@
 # than under test/ because the summary figures need GLMakie; nothing in this
 # file runs under `Pkg.test()`.
 #
+# GLMakie is loaded lazily, on the first call to a figure function, so the
+# sweeps and `bench_report()` run on a headless box without pulling in an
+# OpenGL stack.
+#
 # Every system is built from `BenchRadii`, a test-only `RadiiSource` holding
-# Bondi/Alvarez van der Waals radii, so geometry is exact and reproducible
+# Alvarez (2013) van der Waals radii, so geometry is exact and reproducible
 # instead of depending on the atomic-radii database.
 #
 # Numbers only, no window (works headless):
@@ -21,7 +25,6 @@ using ScatterNet.Interfaces: Interfaces, RadiiSource
 using ScatterNet.Molecule.Molecules: Molecules, Molecule
 using ScatterNet.Molecule.SASA: SASA
 using Random, Printf, Statistics, DelimitedFiles
-using GLMakie
 
 # ---------------------------------------------------------------------------
 # radii
@@ -36,13 +39,13 @@ Interfaces.lookup(s::BenchRadii, ions::AbstractVector{<:AbstractString}) =
         (String(i), get(s.table, String(i), nothing)) for i in ions
     ]
 
-"Bondi/Alvarez van der Waals radii (Å); `*_i` entries are Shannon ionic radii."
+"Alvarez (2013) van der Waals radii (Å); `*_i` entries are Shannon ionic radii."
 const BENCH_RAD = Dict(
-    "H"=>1.10, "C"=>1.70, "N"=>1.55, "O"=>1.52, "F"=>1.47, "P"=>1.80, "S"=>1.80,
-    "Cl"=>1.75, "Br"=>1.85, "I"=>1.98, "Si"=>2.10, "B"=>1.92,
-    "Na"=>2.27, "K"=>2.75, "Cs"=>3.43, "Mg"=>1.73, "Ca"=>2.31,
-    "Fe"=>2.04, "Cu"=>1.96, "Zn"=>2.01, "Ni"=>1.97, "Pt"=>2.13, "Ru"=>2.10,
-    "Mo"=>2.10, "Ti"=>2.11,
+    "H"=>1.20, "C"=>1.77, "N"=>1.66, "O"=>1.50, "F"=>1.46, "P"=>1.90, "S"=>1.89,
+    "Cl"=>1.82, "Br"=>1.86, "I"=>2.04, "Si"=>2.19, "B"=>1.91,
+    "Na"=>2.50, "K"=>2.73, "Cs"=>3.48, "Mg"=>2.51, "Ca"=>2.62,
+    "Fe"=>2.44, "Cu"=>2.38, "Zn"=>2.39, "Ni"=>2.40, "Pt"=>2.32, "Ru"=>2.46,
+    "Mo"=>2.45, "Ti"=>2.45,
     "Na_i"=>1.16, "Cl_i"=>1.81, "Cs_i"=>1.81, "O_i"=>1.40)
 
 const BENCH_SRC = BenchRadii(BENCH_RAD)
@@ -214,8 +217,8 @@ wrote off. That keeps this analysis from drifting out of sync with the source.
 """
 function skip_diagnostics(
     m::Molecule; probe = BENCH_PROBE, n_occ = 512, n_exp = BENCH_NEXP, area_tol = 0.8)
-    ref = SASA.sasa_atoms(m; probe, n_occ, n_exp, area_tol = 0.0)
-    got = SASA.sasa_atoms(m; probe, n_occ, n_exp, area_tol)
+    ref = SASA.sasa(m; probe, n_occ, n_exp, area_tol = 0.0)[1]
+    got = SASA.sasa(m; probe, n_occ, n_exp, area_tol)[1]
     fired = [i for i in eachindex(ref) if ref[i] > 0 && got[i] == 0.0]
     lost  = isempty(fired) ? 0.0 : sum(ref[i] for i in fired)
     (   n_atoms = length(ref), n_skipped = length(fired), area_lost = lost,
@@ -314,12 +317,12 @@ function accuracy_sweep(csv_path = nothing; n_exp = BENCH_NEXP, n_occ = 512,
                         probe = BENCH_PROBE, tols = BENCH_TOLS)
     rows = Vector{Any}[]
     for (tag, class, m) in bench_systems()
-        ref  = SASA.sasa_atoms(m; probe, n_occ, n_exp, area_tol = 0.0)
-        conv = SASA.sasa_atoms(m; probe, n_occ, n_exp = BENCH_NREF, area_tol = 0.0)
+        ref  = SASA.sasa(m; probe, n_occ, n_exp, area_tol = 0.0)[1]
+        conv = SASA.sasa(m; probe, n_occ, n_exp = BENCH_NREF, area_tol = 0.0)[1]
         cen  = classify_census(m, probe)
         sref, sconv = sum(ref), sum(conv)
         for tol in tols
-            a = SASA.sasa_atoms(m; probe, n_occ, n_exp, area_tol = tol)
+            a = SASA.sasa(m; probe, n_occ, n_exp, area_tol = tol)[1]
             fired = [i for i in eachindex(ref) if ref[i] > 0 && a[i] == 0.0]
             push!(rows, Any[tag, class, length(ref), tol, sum(a), sref, sconv,
                             length(fired),
@@ -356,9 +359,9 @@ function convergence_sweep(;ns = (64, 128, 256, 512, 1024, 2048, 4096, 8192, 163
     isempty(reps) && (reps = bench_systems()[1:6])
     rows = Vector{Any}[]
     for (tag, class, m) in reps
-        conv = sum(SASA.sasa_atoms(m; probe, n_occ = 512, n_exp = BENCH_NREF, area_tol = 0.0))
+        conv = sum(SASA.sasa(m; probe, n_occ = 512, n_exp = BENCH_NREF, area_tol = 0.0)[1])
         for n in ns
-            v = sum(SASA.sasa_atoms(m; probe, n_occ = min(512, n), n_exp = n, area_tol = 0.0))
+            v = sum(SASA.sasa(m; probe, n_occ = min(512, n), n_exp = n, area_tol = 0.0)[1])
             push!(rows, Any[tag, class, n, v, conv, conv == 0 ? 0.0 : (v - conv)/conv])
         end
     end
@@ -381,7 +384,7 @@ function analytic_sweep(; probe = BENCH_PROBE, n_exp = 8192)
             src = BenchRadii(Dict("A" => r))
             m = Molecules.create("pair", ["A","A"], [(0.,0.,0.), (d,0.,0.)]; radii_source = src)
             exact = 4π*ρ^2 - 2π*ρ*(ρ - d/2)
-            got = SASA.sasa_atoms(m; probe, n_occ = 512, n_exp, area_tol = 0.0)[1]
+            got = SASA.sasa(m; probe, n_occ = 512, n_exp, area_tol = 0.0)[1][1]
             push!(rows, Any[r, ρ, d, d/(2ρ), got, exact, (got - exact)/exact])
         end
     end
@@ -534,10 +537,29 @@ end
 # figures
 # ---------------------------------------------------------------------------
 
-const _EXPOSED_C = RGBf(1.00, 0.62, 0.13)
-const _OCC_C     = RGBf(0.24, 0.26, 0.32)
+# Colours as plain tuples so this file parses and the sweeps run with no
+# plotting package loaded; they become `RGBf` only once GLMakie is in.
+const _EXPOSED_RGB = (1.00, 0.62, 0.13)
+const _OCC_RGB     = (0.24, 0.26, 0.32)
+const _SAMPLED_RGB = (0.35, 0.55, 0.75)
 
-"Distinct colours for an arbitrary number of series."
+const _PLOTTING_READY = Ref(false)
+
+"""
+    _ensure_plotting() -> Nothing
+
+Load GLMakie on first use. Keeping it out of the top level means
+[`bench_report`](@ref) and the sweeps work on a machine with no display,
+where importing GLMakie is at best slow and at worst fatal on teardown.
+"""
+function _ensure_plotting()
+    _PLOTTING_READY[] && return nothing
+    Core.eval(@__MODULE__, :(using GLMakie))
+    _PLOTTING_READY[] = true
+    return nothing
+end
+
+"Distinct colours for an arbitrary number of series; needs GLMakie loaded."
 _series_colors(n) = [get(GLMakie.Makie.ColorSchemes.viridis, i / max(n, 1)) for i in 1:n]
 
 """
@@ -555,6 +577,7 @@ Six-panel summary of the accuracy sweep:
 Every number here is produced by `test/sasa_bench.jl`; this only draws it.
 """
 function bench_figure(; n_exp = BENCH_NEXP, n_occ = 512, probe = BENCH_PROBE)
+    _ensure_plotting()
     _, rows = accuracy_sweep(; n_exp, n_occ, probe)
     classes = unique(_col(rows, 2))
     cols = _series_colors(length(classes))
@@ -568,7 +591,7 @@ function bench_figure(; n_exp = BENCH_NEXP, n_occ = 512, probe = BENCH_PROBE)
     ax1 = Axis(fig[1, 1]; title = "area_tol early exit",
                xlabel = "area_tol (A^2)", ylabel = "atoms skipped (%)")
     ax1b = Axis(fig[1, 1]; ylabel = "total area lost (A^2)",
-                yaxisposition = :right, yticklabelcolor = _EXPOSED_C)
+                yaxisposition = :right, yticklabelcolor = RGBf(_EXPOSED_RGB...))
     hidespines!(ax1b); hidexdecorations!(ax1b)
     pct  = Float64[]; lost = Float64[]
     for tol in BENCH_TOLS
@@ -576,8 +599,8 @@ function bench_figure(; n_exp = BENCH_NEXP, n_occ = 512, probe = BENCH_PROBE)
         push!(pct, 100 * sum(_col(rs, 8)) / sum(_col(rs, 3)))
         push!(lost, sum(_col(rs, 9)))
     end
-    scatterlines!(ax1, BENCH_TOLS, pct; color = _OCC_C, markersize = 10)
-    scatterlines!(ax1b, BENCH_TOLS, lost; color = _EXPOSED_C, markersize = 10)
+    scatterlines!(ax1, BENCH_TOLS, pct; color = RGBf(_OCC_RGB...), markersize = 10)
+    scatterlines!(ax1b, BENCH_TOLS, lost; color = RGBf(_EXPOSED_RGB...), markersize = 10)
 
     # --- 2. worst relative error per class ---------------------------------
     ax2 = Axis(fig[1, 2]; title = "worst relative error by class",
@@ -604,9 +627,9 @@ function bench_figure(; n_exp = BENCH_NEXP, n_occ = 512, probe = BENCH_PROBE)
     n = length(classes)
     barplot!(ax3, repeat(1:n, 3), vcat(exact_e, exact_b, samp);
              stack = repeat(1:3, inner = n),
-             color = repeat([_EXPOSED_C, _OCC_C, RGBf(0.35,0.55,0.75)], inner = n))
-    Legend(fig[2, 3], [PolyElement(color = c) for c in
-                       (_EXPOSED_C, _OCC_C, RGBf(0.35,0.55,0.75))],
+             color = repeat(RGBf.([_EXPOSED_RGB, _OCC_RGB, _SAMPLED_RGB]), inner = n))
+    Legend(fig[2, 3], [PolyElement(color = RGBf(c...)) for c in
+                       (_EXPOSED_RGB, _OCC_RGB, _SAMPLED_RGB)],
            ["exact: exposed", "exact: buried", "sampled"];
            orientation = :horizontal, framevisible = false, labelsize = 9)
 
@@ -663,6 +686,7 @@ Wall time against atom count and `n_exp`, plus the per-atom cost, showing
 where `area_tol` actually buys anything.
 """
 function speed_figure()
+    _ensure_plotting()
     _, srows = speed_sweep()
     fig = Figure(size = (1150, 430))
     Label(fig[0, 1:2], "SASA cost"; fontsize = 20, font = :bold)
@@ -697,6 +721,7 @@ end
 Build both figures and display them, blocking until the windows are closed.
 """
 function vis_bench(; kwargs...)
+    _ensure_plotting()
     f1 = bench_figure(; kwargs...)
     f2 = speed_figure()
     display(f2)
@@ -711,6 +736,7 @@ Render both figures to `<prefix>_accuracy.png` and `<prefix>_speed.png`
 without needing a window. Returns the paths written.
 """
 function save_bench_figures(prefix::AbstractString = "bench"; kwargs...)
+    _ensure_plotting()
     paths = String[]
     for (suffix, f) in (("accuracy", bench_figure(; kwargs...)), ("speed", speed_figure()))
         p = "$(prefix)_$(suffix).png"

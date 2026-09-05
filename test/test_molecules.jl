@@ -1,8 +1,8 @@
 # Exercises src/Molecule/Molecules.jl: construction/centering, the two
 # coordinate frames, the lazy radii/vols/r_max accessors, and the error contract.
-using .Molecules: Molecule, create, coords_cartesian, coords_spherical,
-                  radii, vols, r_max, elms, name, sphere_volume,
-                  MoleculeError, _to_tuples
+using .Molecules:   Molecule, create, coords_cartesian, coords_spherical,
+                    radii, vols, r_max, elms, name, sphere_volume,
+                    MoleculeError, _to_tuples
 using ScatterNet.Molecule: SASA
 
 # row 1 = r, row 2 = theta, row 3 = phi
@@ -65,8 +65,7 @@ ScatterNet.Interfaces.lookup(::NeverResolves, ions::AbstractVector{<:AbstractStr
     end
 
     @testset "coords_spherical is the polar form of coords_cartesian" begin
-        m = create("test", ["h", "h", "h"],
-                   [(1.0, 2.0, 3.0), (-2.0, 1.0, -4.0), (0.5, -0.5, 2.0)])
+        m = create("test", ["h", "h", "h"], [(1.0, 2.0, 3.0), (-2.0, 1.0, -4.0), (0.5, -0.5, 2.0)])
         c, s = coords_cartesian(m), coords_spherical(m)
         @test size(s) == size(c) == (3, 3)
         for j in 1:3
@@ -94,8 +93,7 @@ ScatterNet.Interfaces.lookup(::NeverResolves, ions::AbstractVector{<:AbstractStr
 
     @testset "an atom sitting exactly on the centroid is r = 0, not NaN" begin
         # 0/0 would also bite an interior atom of a larger molecule
-        m = create("test", ["h", "h", "h"],
-                   [(-1.0, 0.0, 0.0), (0.0, 0.0, 0.0), (1.0, 0.0, 0.0)])
+        m = create("test", ["h", "h", "h"], [(-1.0, 0.0, 0.0), (0.0, 0.0, 0.0), (1.0, 0.0, 0.0)])
         @test check_float(r_(m)[2], 0.0)
         @test !any(isnan, coords_spherical(m))
     end
@@ -108,8 +106,7 @@ ScatterNet.Interfaces.lookup(::NeverResolves, ions::AbstractVector{<:AbstractStr
     end
 
     @testset "name and elms accessors round-trip the inputs" begin
-        m = create("water", ["o", "h", "h"],
-                   [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)])
+        m = create("water", ["o", "h", "h"], [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)])
         @test name(m) == "water"
         @test elms(m) == ["o", "h", "h"]
         @test elms(m) isa Vector{String}
@@ -123,8 +120,8 @@ ScatterNet.Interfaces.lookup(::NeverResolves, ions::AbstractVector{<:AbstractStr
         )
         @test length(vols(m)) == 3
         ev(x) = (4.0 / 3.0) * π * x^3
-        @test check_float(vols(m)[1], ev(1.274))
-        @test check_float(vols(m)[3], ev(2.24))
+        @test check_float(vols(m)[1], ev(2.44))
+        @test check_float(vols(m)[3], ev(2.4))
         @test vols(m) == sphere_volume.(radii(m))     # vols is exactly (4/3)πr³ of radii
     end
 
@@ -135,14 +132,13 @@ ScatterNet.Interfaces.lookup(::NeverResolves, ions::AbstractVector{<:AbstractStr
     end
 
     @testset "r_max is the largest per-atom radius" begin
-        m = create("test", ["fe", "o", "rn"],
-                   [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0)])
+        m = create("test", ["fe", "o", "rn"], [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0)])
         @test r_max(m) isa Float64
         @test check_float(r_max(m), maximum(radii(m)))
-        @test check_float(r_max(m), 2.24)               # rn is the largest of the three
+        @test check_float(r_max(m), 2.44)               # fe is the largest of the three
         @test r_max(m) === r_max(m)
         # a single-atom molecule's r_max is just that atom's radius
-        @test check_float(r_max(create("t", ["fe"], [(0.0, 0.0, 0.0)])), 1.274)
+        @test check_float(r_max(create("t", ["fe"], [(0.0, 0.0, 0.0)])), 2.44)
         # order of the atoms does not matter
         m2 = create("test", ["rn", "fe", "o"],
                     [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0)])
@@ -191,8 +187,7 @@ ScatterNet.Interfaces.lookup(::NeverResolves, ions::AbstractVector{<:AbstractStr
     end
 
     @testset "one unresolvable element out of many still raises" begin
-        m = create("test", ["fe", "zzzz", "o"],
-                   [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0)])
+        m = create("test", ["fe", "zzzz", "o"], [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0)])
         @test_throws MoleculeError radii(m)
     end
 
@@ -227,12 +222,12 @@ ScatterNet.Interfaces.lookup(::NeverResolves, ions::AbstractVector{<:AbstractStr
         already = NTuple{3,Float64}[(1.0, 2.0, 3.0)]
         @test _to_tuples(already) === already          # identity fast path, no copy
         @test _to_tuples([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]) ==
-              [(1.0, 2.0, 3.0), (4.0, 5.0, 6.0)]
+                [(1.0, 2.0, 3.0), (4.0, 5.0, 6.0)]
         @test _to_tuples([(1, 2, 3)]) == [(1.0, 2.0, 3.0)]          # Int -> Float64
         @test _to_tuples([(1, 2, 3)]) isa Vector{NTuple{3,Float64}}
-        @test _to_tuples([1:3]) == [(1.0, 2.0, 3.0)]                 # a range works too
+        @test _to_tuples([1:3]) == [(1.0, 2.0, 3.0)]                # a range works too
         @test _to_tuples(((1.0, 2.0, 3.0), (4.0, 5.0, 6.0))) ==
-              [(1.0, 2.0, 3.0), (4.0, 5.0, 6.0)]                     # tuple of tuples
+                [(1.0, 2.0, 3.0), (4.0, 5.0, 6.0)]                  # tuple of tuples
     end
 
     @testset "_to_tuples rejects wrong-length entries" begin
@@ -258,8 +253,7 @@ ScatterNet.Interfaces.lookup(::NeverResolves, ions::AbstractVector{<:AbstractStr
 
     @testset "length mismatch raises, in both directions" begin
         @test_throws MoleculeError create("bad", ["o", "h"], [(0.0, 0.0, 0.0)])
-        @test_throws MoleculeError create("bad", ["o"],
-                                          [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)])
+        @test_throws MoleculeError create("bad", ["o"], [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)])
         @test_throws MoleculeError create("bad", String[], [(0.0, 0.0, 0.0)])
     end
 
@@ -280,15 +274,14 @@ ScatterNet.Interfaces.lookup(::NeverResolves, ions::AbstractVector{<:AbstractStr
         end
 
         # the clamp is floor-only: it must not disturb ordinary positive radii
-        m = create("normal", ["fe", "o", "rn"],
-                   [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0)])
+        m = create("normal", ["fe", "o", "rn"], [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0)])
         @test all(>(0.0), radii(m))
         @test all(>(0.0), vols(m))
 
         # a clamped ion alongside normal atoms leaves the others untouched
         m = create("mixed", ["h1+", "fe"], [(0.0, 0.0, 0.0), (3.0, 0.0, 0.0)])
         @test radii(m)[1] == 0.0
-        @test check_float(radii(m)[2], 1.274)
+        @test check_float(radii(m)[2], 2.44)
         @test r_max(m) == radii(m)[2]     # the clamped atom never wins r_max
     end
 
@@ -296,7 +289,7 @@ ScatterNet.Interfaces.lookup(::NeverResolves, ions::AbstractVector{<:AbstractStr
         # clamped to r = 0, the atom is a bare probe-radius sphere rather than
         # an inverted one -- the invariant the clamp exists to protect.
         m = create("proton", ["h1+"], [(0.0, 0.0, 0.0)])
-        a = SASA.sasa_atoms(m; n_occ = 64, n_exp = 256, probe = 1.4)
+        a = SASA.sasa(m; n_occ = 64, n_exp = 256, probe = 1.4)[1]
         @test length(a) == 1
         @test check_float(a[1], 4π * 1.4^2)
     end

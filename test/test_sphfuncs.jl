@@ -1,6 +1,5 @@
 # Exercises src/Scattering/SphFuncs.jl against closed forms and exact identities
-# (Unsold's theorem, the Y = P̄ e^{imφ} definition, the Bessel recurrence),
-# not just tabulated numbers.
+# (Unsold's theorem, the Y = P̄ e^{imφ} definition, the Bessel recurrence).
 using .SphFuncs: sphHarm, sphBess, legendre_sphPlm, SphHarmError, SphBessError
 
 y00 = 1.0 / (2.0 * sqrt(π))
@@ -65,7 +64,7 @@ j2(x) = x == 0.0 ? 0.0 : (3.0 / x^3 - 1.0 / x) * sin(x) - 3.0 * cos(x) / x^2
 
     @testset "sphHarm: Unsold's theorem, sum_m |Y_lm|^2 = (2l+1)/4pi" begin
         # Y_{l,-m} = (-1)^m conj(Y_{lm}), so the stored m >= 0 half determines
-        # the full sum; this pins normalization AND phase convention exactly.
+        # the full sum; this pins normalization and phase convention exactly.
         θ = [0.05, 0.7, 1.5707, 2.4, 3.09]; φ = [0.0, 1.2, -2.5, 3.0, 0.4]
         lMax = 6
         y = sphHarm(lMax, θ, φ)
@@ -231,12 +230,9 @@ j2(x) = x == 0.0 ? 0.0 : (3.0 / x^3 - 1.0 / x) * sin(x) - 3.0 * cos(x) / x^2
             @test check_float(legendre_sphPlm(0, 0, x), 1.0 / (2.0 * sqrt(π)))
             @test check_float(legendre_sphPlm(1, 0, x), sqrt(3.0 / (4.0 * π)) * x)
             # Condon-Shortley phase: P̄_1^1 is negative for x in (-1, 1)
-            @test check_float(legendre_sphPlm(1, 1, x),
-                              -sqrt(3.0 / (8.0 * π)) * sqrt(max(0.0, 1.0 - x^2)))
-            @test check_float(legendre_sphPlm(2, 0, x),
-                              sqrt(5.0 / (16.0 * π)) * (3x^2 - 1.0))
-            @test check_float(legendre_sphPlm(2, 2, x),
-                              sqrt(15.0 / (32.0 * π)) * (1.0 - x^2))
+            @test check_float(legendre_sphPlm(1, 1, x), -sqrt(3.0 / (8.0 * π)) * sqrt(max(0.0, 1.0 - x^2)))
+            @test check_float(legendre_sphPlm(2, 0, x), sqrt(5.0 / (16.0 * π)) * (3x^2 - 1.0))
+            @test check_float(legendre_sphPlm(2, 2, x), sqrt(15.0 / (32.0 * π)) * (1.0 - x^2))
         end
         @test legendre_sphPlm(3, 2, 0.5) isa Float64
         @test legendre_sphPlm(2, 0, 1) isa Float64        # Integer x is accepted
