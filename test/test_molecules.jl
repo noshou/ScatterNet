@@ -263,9 +263,8 @@ ScatterNet.Interfaces.lookup(::NeverResolves, ions::AbstractVector{<:AbstractStr
     end
 
     @testset "negative ionic radii are clamped to zero" begin
-        # Shannon's table stores h1+/c4+/n5+ with negative radii -- extrapolation
-        # artifacts, not physical sizes. `_compute_radii` clamps them to 0.0 so
-        # volumes stay non-negative and SASA's `r + probe` never inverts.
+        # Shannon's table stores h1+/c4+/n5+ with negative radii. `_compute_radii` 
+        # clamps them to 0.0 so volumes stay non-negative and SASA's `r + probe` never inverts.
         for ion in ("h1+", "c4+", "n5+")
             m = create("artifact", [ion], [(0.0, 0.0, 0.0)])
             @test radii(m) == [0.0]
@@ -286,8 +285,7 @@ ScatterNet.Interfaces.lookup(::NeverResolves, ions::AbstractVector{<:AbstractStr
     end
 
     @testset "a zero-radius atom still has a well-defined SASA" begin
-        # clamped to r = 0, the atom is a bare probe-radius sphere rather than
-        # an inverted one -- the invariant the clamp exists to protect.
+        # clamped to r = 0, the atom is a bare probe-radius sphere rather than an inverted one.
         m = create("proton", ["h1+"], [(0.0, 0.0, 0.0)])
         a = SASA.sasa(m; n_occ = 64, n_exp = 256, probe = 1.4)[1]
         @test length(a) == 1

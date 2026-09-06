@@ -514,9 +514,7 @@ end
         pe, _, _ = SASA.shell_points(m; probe = probe, n_target = 200)
         @test size(pe, 2) == 200
 
-        # every point sits on the expanded sphere, in the molecule's own
-        # centred frame -- the same origin `coords_cartesian` uses, which is
-        # what lets Scattering mix this cloud with the atoms' own multipoles.
+        # every point sits on the expanded sphere, in the molecule's own centred frame .
         atom = Molecules.coords_cartesian(m)[:, 1]
         for k in axes(pts, 2)
             @test isapprox(sqrt(sum(abs2, pts[:, k] .- atom)), ρ; atol = 1e-10)

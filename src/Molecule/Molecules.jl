@@ -70,21 +70,7 @@ Spherical `(r, theta, phi)` per column of the `(3, n)` cartesian matrix `c`,
 returned as a `(3, n)` matrix sharing `c`'s column index (the atom/point).
 `theta = acos(z/r)` lies in `[0, π]` and `phi = atan(y, x)` in `(-π, π]`.
 
-This is the transform behind [`coords_spherical`](@ref), exposed because the
-same conversion is needed for point sets that are not a molecule's atoms --
-notably the hydration-shell dummies, which sit out on the solvent-accessible
-surface rather than at nuclei, and which must reach `Scattering`'s `B_lm` in
-the same `(r, theta, phi)` layout.
-
-!!! warning "Does not centre"
-    `c` is converted as given; no centroid is subtracted. That is deliberate:
-    every point set entering a multipole expansion has to share one origin, so
-    re-centring a subset on its own centroid would silently misplace it
-    relative to the molecule. Callers wanting a centred frame must centre
-    first, as [`create`](@ref) does.
-
-`r = 0` (a point exactly at the origin -- a single-atom molecule, say) would
-make `theta` a `0/0`; it is handled without one. The angle is arbitrary there
+`r = 0` would make `theta` a `0/0`; it is handled without one. The angle is arbitrary there
 and unobservable downstream, since `j_l(0) = 0` for every `l > 0`.
 
 # Arguments
@@ -160,7 +146,9 @@ frames computed now, `radii`/`vols`/`r_max` on first access.
 
 # Arguments
 - `name`: molecule label.
-- `elms`: element/ion string per atom.
+- `elms`: element/ion string per atom, e.g. `"c"`, `"Fe"`, `"o2-"`. Case is
+        normalized to lowercase (the radii and form-factor tables are lowercase-keyed),
+        so `elms(m)` returns the lowercased strings.
 - `coords`: per-atom `(x, y, z)` in any frame; length must match `elms`.
 
 # Keywords
@@ -171,7 +159,7 @@ function create(name::AbstractString, elms::AbstractVector{<:AbstractString}, co
     cs = _to_tuples(coords)
     n  = length(cs)
     n == length(elms) || throw(MoleculeError("coords and elms length mismatch"))
-    es = collect(String, elms)
+    es = String[lowercase(e) for e in elms]   # radii/form-factor tables are lowercase-keyed
     cart = _center(cs)
     sph  = to_spherical(cart)
     rad  = Lazy{Vector{Float64}}(() -> _compute_radii(radii_source, es))

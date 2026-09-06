@@ -1,25 +1,24 @@
 [deps]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+CondaPkg = "992eb4ea-22a4-4c89-a5bb-47a3300528ab"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 ScatterNet = "f10a6c88-74b5-485f-9c8c-589f8f9e3c2a"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
-# PYTHON AIRLOCK
+# PYTHON, BY DESIGN
 # ------------------------------------------------------------------------------
-# PythonCall + CondaPkg are deliberately NOT dependencies of this environment.
-# `Pkg.test` precompiles the whole test environment, and PythonCall's __init__
-# resolves the CondaPkg (numpy + xraydb) env the moment PythonCall is *loaded*
-# -- including inside a precompile worker. So as long as PythonCall is reachable
-# from `test/Project.toml`, a bare `Pkg.test()` provisions conda before a single
-# test runs, which is exactly what the airlock must prevent.
-#
-# They live in `test/xraydb/Project.toml` instead. The opt-in xraydb form-factor
-# tests (`test_formfactor.jl`, enabled with SCATTERNET_TEST_XRAYDB=1) push that
-# directory onto LOAD_PATH at runtime and only then `import PythonCall`, so the
-# conda env is provisioned on the opt-in path and nowhere else.
+# PythonCall + CondaPkg ARE dependencies of the test environment. Loading
+# PythonCall provisions the CondaPkg (numpy + xraydb) env, and `Pkg.test`
+# precompiles the whole test environment, so a bare `Pkg.test()` builds that env
+# and runs the xraydb form-factor tests. That is intended: the suite exercises
+# the backend and the `FormFactorXrayDBExt` extension on every run, with no
+# opt-in flag and no conditionally-skipped testsets.
 
 [compat]
 Aqua = "0.8"
+CondaPkg = "0.2"
 JET = "0.9, 0.10, 0.11, 0.12"
+PythonCall = "0.9"

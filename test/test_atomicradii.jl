@@ -8,13 +8,13 @@ lookup_one(ion) = _resolve_all([ion])[1][2]
 @testset "AtomicRadii" begin
 
     @testset "tryparse_ion: magnitude-then-sign and sign-then-magnitude" begin
-        @test tryparse_ion("fe3+") == Ion("fe", 3)
-        @test tryparse_ion("fe+3") == Ion("fe", 3)
-        @test tryparse_ion("fe3-") == Ion("fe", -3)
-        @test tryparse_ion("fe-3") == Ion("fe", -3)
+        @test tryparse_ion("fe3+")  == Ion("fe", 3)
+        @test tryparse_ion("fe+3")  == Ion("fe", 3)
+        @test tryparse_ion("fe3-")  == Ion("fe", -3)
+        @test tryparse_ion("fe-3")  == Ion("fe", -3)
         @test tryparse_ion("fe12+") == Ion("fe", 12)     # multi-digit magnitude
-        @test tryparse_ion("h1+")  == Ion("h", 1)
-        @test tryparse_ion("x+")   == Ion("x", 1)        # 1-letter element
+        @test tryparse_ion("h1+")   == Ion("h", 1)
+        @test tryparse_ion("x+")    == Ion("x", 1)        # 1-letter element
     end
 
     @testset "tryparse_ion: a bare sign means +/-1" begin
@@ -46,13 +46,13 @@ lookup_one(ion) = _resolve_all([ion])[1][2]
     end
 
     @testset "tryparse_ion: unparseable junk" begin
-        @test tryparse_ion("")      === nothing
-        @test tryparse_ion("Fe3+")  === nothing   # uppercase: table keys are lowercase
-        @test tryparse_ion("fe3")   === nothing   # magnitude with no sign
-        @test tryparse_ion("abc3+") === nothing   # element is 1-2 letters
-        @test tryparse_ion("3+")    === nothing   # no element
-        @test tryparse_ion("fe!!")  === nothing
-        @test tryparse_ion("fe3++") === nothing
+        @test tryparse_ion("")       === nothing
+        @test tryparse_ion("Fe3+")   === nothing   # uppercase: table keys are lowercase
+        @test tryparse_ion("fe3")    === nothing   # magnitude with no sign
+        @test tryparse_ion("abc3+")  === nothing   # element is 1-2 letters
+        @test tryparse_ion("3+")     === nothing   # no element
+        @test tryparse_ion("fe!!")   === nothing
+        @test tryparse_ion("fe3++")  === nothing
         @test tryparse_ion("fe3.5+") === nothing
     end
 

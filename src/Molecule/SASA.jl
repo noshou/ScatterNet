@@ -211,7 +211,7 @@ populations (each carries its own fitted contrast; CRYSOL's defaults are
 `1, 1, 0` in units of `0.03 e/Å³`).
 
 - `CONVEX`:  outer surface, open solvent ahead of it.
-- `CONCAVE`: outer surface but recessed -- a groove or pocket.
+- `CONCAVE`: outer surface but recessed.
 - `CAVITY`:  enclosed interior void, unreachable from outside.
 """
 @enum BeadClass CONVEX CONCAVE CAVITY
@@ -244,7 +244,7 @@ end
 
 Classify one shell bead by what fraction of its outward hemisphere escapes the
 molecule. Rays are cast only over [`_BEAD_RAY_RANGE`](@ref), and the outward normal is
-tried first so open surface -- the common case -- costs one ray.
+tried first so open surfaces, which is the common case, costs one ray.
 """
 function _bead_class(
     p::NTuple{3,Float64}, n̂::NTuple{3,Float64}, nb::Vector{Int},
@@ -319,23 +319,10 @@ end
 The solvent-accessible surface of `mol` as a point cloud: the area each point
 stands for, and which CRYSOL border-layer population it belongs to.
 
-Where [`sasa`](@ref) reduces each patch to scalars, this keeps the patch itself
--- what a hydration-shell model needs, since a patch's spatial extent is the
-thing that scatters.
-
 Each atom is sampled at [`_SHELL_SAMPLE`](@ref) directions and the cloud is then
-thinned to `n_target` points for the whole molecule, by keeping a *prefix* of
-each atom's accepted points sized in proportion to that atom's count -- hence to
-its area. Every survivor then carries an equal `sum(area)/M`, so `sum(areas)`
-still matches `sum(sasa(mol)[1])`.
-
-Prefixes, not strides. The plastic sequence is progressive, so any prefix is
-itself low-discrepancy, while an evenly strided subset is a *different* Kronecker
-sequence whose quality depends on how near-rational the stride makes `k/ρ`.
-Measured on a 256-point set thinned to 64: prefix gives first-moment `|mean|`
-`0.04` and worst cap discrepancy `0.078`, striding gives `0.48` and `0.44` --
-the strided points bunch on one side of the sphere, since `frac(4/ρ) ≈ 0.0195`
-advances azimuth only ~7° per kept point.
+thinned to `n_target` points for the whole molecule, by keeping a prefix of
+each atom's accepted points sized in proportion to that atom's count. Every survivor 
+then carries an equal `sum(area)/M`, so `sum(areas)` still matches `sum(sasa(mol)[1])`.
 
 # Arguments
 - `mol`: molecule whose surface to sample.
@@ -352,8 +339,7 @@ as the molecule grows. A cloud already smaller than the budget is kept whole.
 -   `areas::Vector{Float64}`, `(M,)`: Å² per point, equal across all `M`.
 -   `class::Vector{BeadClass}`, `(M,)`: per-point [`BeadClass`](@ref). Cavity
     detection is exact for voids up to [`_BEAD_RAY_RANGE`](@ref) across;
-    anything larger classifies as open surface, which is the intent -- a void
-    that wide holds bulk-like water, not ordered shell water.
+    anything larger classifies as open surface.
 
 `M` is `0` for a molecule with no accessible surface; `pts` is then `(3, 0)`.
 """
@@ -396,12 +382,6 @@ end
 Per-atom loop behind [`shell_points`](@ref), split out for the same reason
 [`_sasa_loop!`](@ref) is: `KDTree` over a bare `Matrix` has no concrete type at
 the call site, so the barrier lets Julia specialize.
-
-Reuses [`_classify`](@ref)'s shortcuts. Unlike `sasa` there is no
-witness/confirm split -- the points are the output, so nothing can be settled
-early. `nrm` carries each point's outward unit normal, which only this loop
-knows and [`_bead_class`](@ref) needs; `counts` gives each atom's block length,
-which [`_prefix_thin`](@ref) needs.
 """
 function _shell_loop(
     tree::T,

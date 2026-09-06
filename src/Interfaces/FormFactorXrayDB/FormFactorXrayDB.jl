@@ -40,13 +40,6 @@ struct FormFactorSourceXrayDB <: FormFactorSource end
 Form factors for a batch of ions at one `energy` over a q grid; one row per
 unique ion, aligned to the returned container's q index.
 
-Implemented by the `FormFactorXrayDBExt` extension, which loads with
-`PythonCall`. Without it this catch-all method is the only one defined and it
-raises [`FormFactorError`](@ref) -- it is deliberately less specific than the
-extension's typed method, so the real implementation wins on dispatch without
-redefining anything. This name is the backend seam the extension extends; it
-is not part of the `Interfaces` public surface.
-
 # Arguments
 - `ions`: vector of ion strings.
 - `energy`: photon energy in eV.
@@ -57,18 +50,23 @@ compute_form_factors(args...) = throw(FormFactorError(
     "FormFactorXrayDBExt extension (and make sure PythonCall is in your environment)"))
 
 """
-    Interfaces.form_factor_table(energy::Real, ions, qvals) -> FF
+    Interfaces.form_factor_table([src::FormFactorSourceXrayDB,] energy::Real, ions, qvals) -> FF
 
 Build an [`FF`](@ref) container for `ions` at one `energy` (eV) over the `qvals`
-(Å⁻¹) grid. Thin wrapper over [`compute_form_factors`](@ref).
+(Å⁻¹) grid. Thin wrapper over [`compute_form_factors`](@ref). The `src`-less
+form defaults the backend to `FormFactorSourceXrayDB()`.
 
 # Arguments
+- `src`: the xraydb backend marker (optional).
 - `energy`: photon energy in eV.
 - `ions`: vector of ion strings.
 - `qvals`: vector of q values in Å⁻¹.
 """
-Interfaces.form_factor_table(energy::Real, ions, qvals)::FF =
+Interfaces.form_factor_table(::FormFactorSourceXrayDB, energy::Real, ions, qvals)::FF =
     compute_form_factors(collect(String, ions), energy, collect(Float64, qvals))
+
+Interfaces.form_factor_table(energy::Real, ions, qvals)::FF =
+    Interfaces.form_factor_table(FormFactorSourceXrayDB(), energy, ions, qvals)
 
 """
     Interfaces.form_factor_log(t::FF) -> Vector{String}

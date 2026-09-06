@@ -144,10 +144,10 @@ function cyclohexane()
     p, e
 end
 
-"Adamantane C₁₀ cage (carbons only) -- a compact, heavily self-occluding case."
+"Adamantane C₁₀ cage (carbons only)."
 adamantane() = ([(0.,0.,0.), (1.54,1.54,0.), (1.54,0.,1.54), (0.,1.54,1.54),
-                 (2.57,0.90,0.90), (0.90,2.57,0.90), (0.90,0.90,2.57),
-                 (2.57,2.57,2.57), (3.47,1.80,1.80), (1.80,3.47,1.80)],
+                (2.57,0.90,0.90), (0.90,2.57,0.90), (0.90,0.90,2.57),
+                (2.57,2.57,2.57), (3.47,1.80,1.80), (1.80,3.47,1.80)],
                 fill("C", 10))
 
 "Octahedral ML₆ complex at metal-ligand distance `d`."
@@ -563,13 +563,8 @@ end
 _series_colors(n) = [get(GLMakie.Makie.ColorSchemes.viridis, i / max(n, 1)) for i in 1:n]
 
 # --- world-age boundary --------------------------------------------------------
-# `_ensure_plotting` adds the `GLMakie` binding at *run* time, so any method
-# already on the stack (compiled in an older world) can't see it -- calling a
-# drawing function directly then dies with "GLMakie not defined ... binding may
-# be too new". The public figure entry points below therefore load GLMakie and
-# then re-enter the real `_*` implementation through `invokelatest`, which
-# resolves against the current world; everything they call transitively is then
-# fine without further wrapping.
+# `_ensure_plotting` adds the `GLMakie` binding at run time, so any method
+# already on the stack (compiled in an older world) can't see it.
 
 "See [`_bench_figure`](@ref). Loads GLMakie, then draws in the current world."
 bench_figure(; kwargs...) = (_ensure_plotting(); Base.invokelatest(_bench_figure; kwargs...))
@@ -598,8 +593,7 @@ Six-panel summary of the accuracy sweep:
 
 Every number here is produced by `test/sasa_bench.jl`; this only draws it.
 
-Call [`bench_figure`](@ref) rather than this directly -- it loads GLMakie and
-crosses the world-age boundary first.
+Call [`bench_figure`](@ref) rather than this directly.
 """
 function _bench_figure(; n_exp = BENCH_NEXP, n_occ = 512, probe = BENCH_PROBE)
     _, rows = accuracy_sweep(; n_exp, n_occ, probe)
@@ -607,13 +601,13 @@ function _bench_figure(; n_exp = BENCH_NEXP, n_occ = 512, probe = BENCH_PROBE)
     cols = _series_colors(length(classes))
 
     fig = Figure(size = (1500, 950))
-    Label(fig[0, 1:3],
-          "SASA accuracy and cost  ($(length(unique(_col(rows,1)))) systems, " *
-          "probe $(probe) A, n_exp $(n_exp))"; fontsize = 20, font = :bold)
+    Label(  fig[0, 1:3],
+            "SASA accuracy and cost  ($(length(unique(_col(rows,1)))) systems, " *
+            "probe $(probe) A, n_exp $(n_exp))"; fontsize = 20, font = :bold)
 
     # --- 1. skip firing + area lost vs area_tol -----------------------------
-    ax1 = Axis(fig[1, 1]; title = "area_tol early exit",
-               xlabel = "area_tol (A^2)", ylabel = "atoms skipped (%)")
+    ax1 = Axis( fig[1, 1]; title = "area_tol early exit",
+                xlabel = "area_tol (A^2)", ylabel = "atoms skipped (%)")
     ax1b = Axis(fig[1, 1]; ylabel = "total area lost (A^2)",
                 yaxisposition = :right, yticklabelcolor = RGBf(_EXPOSED_RGB...))
     hidespines!(ax1b); hidexdecorations!(ax1b)
@@ -628,7 +622,7 @@ function _bench_figure(; n_exp = BENCH_NEXP, n_occ = 512, probe = BENCH_PROBE)
 
     # --- 2. worst relative error per class ---------------------------------
     ax2 = Axis(fig[1, 2]; title = "worst relative error by class",
-               xlabel = "area_tol (A^2)", ylabel = "worst error (%)")
+                xlabel = "area_tol (A^2)", ylabel = "worst error (%)")
     for (k, c) in enumerate(classes)
         ys = [(rs = [r for r in rows if r[2] == c && r[4] == tol];
                isempty(rs) ? 0.0 : 100 * minimum(_col(rs, 11))) for tol in BENCH_TOLS]
@@ -637,9 +631,9 @@ function _bench_figure(; n_exp = BENCH_NEXP, n_occ = 512, probe = BENCH_PROBE)
     axislegend(ax2; position = :lb, labelsize = 9, framevisible = false)
 
     # --- 3. _classify census ------------------------------------------------
-    ax3 = Axis(fig[1, 3]; title = "how atoms are resolved",
-               ylabel = "% of atoms", xticks = (1:length(classes), classes),
-               xticklabelrotation = pi/5, xticklabelsize = 9)
+    ax3 = Axis( fig[1, 3]; title = "how atoms are resolved",
+                ylabel = "% of atoms", xticks = (1:length(classes), classes),
+                xticklabelrotation = pi/5, xticklabelsize = 9)
     exact_e = Float64[]; exact_b = Float64[]; samp = Float64[]
     for c in classes
         rs = [r for r in rows if r[2] == c && r[4] == 0.0]
@@ -650,18 +644,18 @@ function _bench_figure(; n_exp = BENCH_NEXP, n_occ = 512, probe = BENCH_PROBE)
     end
     n = length(classes)
     barplot!(ax3, repeat(1:n, 3), vcat(exact_e, exact_b, samp);
-             stack = repeat(1:3, inner = n),
-             color = repeat([RGBf(c...) for c in (_EXPOSED_RGB, _OCC_RGB, _SAMPLED_RGB)], inner = n))
-    Legend(fig[2, 3], [PolyElement(color = RGBf(c...)) for c in
-                       (_EXPOSED_RGB, _OCC_RGB, _SAMPLED_RGB)],
-           ["exact: exposed", "exact: buried", "sampled"];
-           orientation = :horizontal, framevisible = false, labelsize = 9)
+            stack = repeat(1:3, inner = n),
+            color = repeat([RGBf(c...) for c in (_EXPOSED_RGB, _OCC_RGB, _SAMPLED_RGB)], inner = n))
+    Legend(fig[2, 3],  [PolyElement(color = RGBf(c...)) for c in
+                        (_EXPOSED_RGB, _OCC_RGB, _SAMPLED_RGB)],
+                    ["exact: exposed", "exact: buried", "sampled"];
+                    orientation = :horizontal, framevisible = false, labelsize = 9)
 
     # --- 4. sampling error by class ----------------------------------------
     ax4 = Axis(fig[3, 1]; title = "sampling error vs $(BENCH_NREF)-pt reference",
-               ylabel = "|relative error| (%)", yscale = log10,
-               xticks = (1:length(classes), classes),
-               xticklabelrotation = pi/5, xticklabelsize = 9)
+                ylabel = "|relative error| (%)", yscale = log10,
+                xticks = (1:length(classes), classes),
+                xticklabelrotation = pi/5, xticklabelsize = 9)
     for (k, c) in enumerate(classes)
         rs = [r for r in rows if r[2] == c && r[4] == 0.0]
         e = filter(>(0), 100 .* abs.(_col(rs, 12)))
@@ -673,13 +667,13 @@ function _bench_figure(; n_exp = BENCH_NEXP, n_occ = 512, probe = BENCH_PROBE)
     # --- 5. convergence in n_exp -------------------------------------------
     _, crows = convergence_sweep(; probe)
     ax5 = Axis(fig[3, 2]; title = "convergence in n_exp",
-               xlabel = "n_exp", ylabel = "|relative error| (%)",
-               xscale = log2, yscale = log10)
+                xlabel = "n_exp", ylabel = "|relative error| (%)",
+                xscale = log2, yscale = log10)
     for (k, t) in enumerate(unique(_col(crows, 1)))
         rs = [r for r in crows if r[1] == t]
         ys = max.(1e-4, 100 .* abs.(_col(rs, 6)))
         scatterlines!(ax5, Float64.(_col(rs, 3)), ys;
-                      color = cols[mod1(k, length(cols))], label = t, markersize = 8)
+                    color = cols[mod1(k, length(cols))], label = t, markersize = 8)
     end
     axislegend(ax5; position = :lb, labelsize = 9, framevisible = false)
 
@@ -688,15 +682,15 @@ function _bench_figure(; n_exp = BENCH_NEXP, n_occ = 512, probe = BENCH_PROBE)
     # every radius traces the same curve: the exposed fraction depends only on
     # d/2rho, so the point set meets the cap boundary identically at any scale.
     ax6 = Axis(fig[3, 3]; title = "error vs analytic cap (all radii coincide)",
-               xlabel = "d / 2rho  (0 = coincident, 1 = tangent)",
-               ylabel = "relative error (%)")
+                xlabel = "d / 2rho  (0 = coincident, 1 = tangent)",
+                ylabel = "relative error (%)")
     hlines!(ax6, [0.0]; color = (:black, 0.3))
     rr = unique(_col(arows, 1))
     for (k, r) in enumerate(rr)
         rs = [x for x in arows if x[1] == r]
         scatterlines!(ax6, Float64.(_col(rs, 4)), 100 .* _col(rs, 7);
-                      color = _series_colors(length(rr))[k],
-                      label = "r = $(r) A", markersize = 7)
+                        color = _series_colors(length(rr))[k],
+                        label = "r = $(r) A", markersize = 7)
     end
     axislegend(ax6; position = :lb, labelsize = 8, framevisible = false, nbanks = 2)
 
@@ -709,8 +703,7 @@ end
 Wall time against atom count and `n_exp`, plus the per-atom cost, showing
 where `area_tol` actually buys anything.
 
-Call [`speed_figure`](@ref) rather than this directly -- it loads GLMakie and
-crosses the world-age boundary first.
+Call [`speed_figure`](@ref) rather than this directly.
 """
 function _speed_figure()
     _, srows = speed_sweep()
@@ -718,24 +711,24 @@ function _speed_figure()
     Label(fig[0, 1:2], "SASA cost"; fontsize = 20, font = :bold)
 
     ax1 = Axis(fig[1, 1]; title = "wall time vs atom count",
-               xlabel = "atoms", ylabel = "ms", xscale = log10, yscale = log10)
+                xlabel = "atoms", ylabel = "ms", xscale = log10, yscale = log10)
     nexps = unique(_col(srows, 2))
     cs = _series_colors(length(nexps))
     for (k, ne) in enumerate(nexps)
         rs = [r for r in srows if r[2] == ne && r[3] == 0.0]
         scatterlines!(ax1, Float64.(_col(rs, 1)), _col(rs, 4);
-                      color = cs[k], label = "n_exp $(ne)", markersize = 9)
+                        color = cs[k], label = "n_exp $(ne)", markersize = 9)
     end
     axislegend(ax1; position = :lt, labelsize = 9, framevisible = false)
 
     ax2 = Axis(fig[1, 2]; title = "per-atom cost, by area_tol",
-               xlabel = "atoms", ylabel = "us / atom")
+                xlabel = "atoms", ylabel = "us / atom")
     tols = unique(_col(srows, 3))
     ct = _series_colors(length(tols))
     for (k, tol) in enumerate(tols)
         rs = [r for r in srows if r[3] == tol && r[2] == 2048]
         scatterlines!(ax2, Float64.(_col(rs, 1)), _col(rs, 5);
-                      color = ct[k], label = "area_tol $(tol)", markersize = 9)
+                        color = ct[k], label = "area_tol $(tol)", markersize = 9)
     end
     axislegend(ax2; position = :lt, labelsize = 9, framevisible = false)
     fig
@@ -746,8 +739,7 @@ end
 
 Build both figures and display them, blocking until the windows are closed.
 
-Call [`vis_bench`](@ref) rather than this directly -- it loads GLMakie and
-crosses the world-age boundary first.
+Call [`vis_bench`](@ref) rather than this directly.
 """
 function _vis_bench(; kwargs...)
     f1 = _bench_figure(; kwargs...)
@@ -763,8 +755,7 @@ end
 Render both figures to `<prefix>_accuracy.png` and `<prefix>_speed.png`
 without needing a window. Returns the paths written.
 
-Call [`save_bench_figures`](@ref) rather than this directly -- it loads GLMakie
-and crosses the world-age boundary first.
+Call [`save_bench_figures`](@ref) rather than this directly.
 """
 function _save_bench_figures(prefix::AbstractString = "bench"; kwargs...)
     paths = String[]

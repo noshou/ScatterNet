@@ -60,9 +60,7 @@ end
 end
 
 @testset "JET: SASA's per-atom loop is free of runtime dispatch" begin
-    # `KDTree(crds)` cannot infer to a concrete type -- the point dimension is a
-    # runtime property of the Matrix. `sasa` therefore crosses a FUNCTION BARRIER
-    # into `_sasa_loop!`, which Julia specialises on the concrete tree type.
+    # `KDTree(crds)` cannot infer to a concrete type.
     #
     # The barrier call is itself one dynamic dispatch, but exactly one per
     # `sasa` call rather than one `inrange` dispatch per atom (which is what
@@ -81,7 +79,7 @@ end
             Float64, Vector{Vec3}, Float64, Int, Int, Float64)))
 
     # `shell_points` crosses the same barrier for the same reason, and its loop
-    # must be just as clean -- it runs per atom AND per sample point.
+    # must be just as clean.
     @test isempty(_reports(SASA._shell_loop,
         (   TT, Matrix{Float64}, Vector{Float64}, Float64, Vector{Vec3},
             Float64, Int)))
@@ -96,8 +94,7 @@ end
         (   TT, Matrix{Float64}, Matrix{Float64}, Matrix{Float64},
             Vector{Float64}, Float64, Vector{Vec3})))
 
-    # the entry point carries exactly the one barrier dispatch, and it is the
-    # barrier -- not `inrange`, and not anything inside the per-atom loop.
+    # the entry point carries exactly the one barrier dispatch.
     rs = _reports(SASA.sasa, (Molecule,))
     @test length(rs) <= 1
     @test all(r -> occursin("_sasa_loop!", sprint(show, r)), rs)

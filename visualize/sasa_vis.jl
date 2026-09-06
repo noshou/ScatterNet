@@ -68,14 +68,6 @@ The demo scenes are tiny, so the full index list is passed as the candidate set
 instead of replicating `sasa`'s KD-tree range query; `i` is passed as
 `self` so the atom never occludes its own points.
 
-This deliberately samples *every* atom, including the ones `sasa` would
-never sample: `SASA._classify` resolves the fully-exposed and fully-engulfed
-regimes exactly from the neighbour list, and those atoms reach no point loop at
-all in the real code. Sampling them anyway is what makes the pictures worth
-looking at -- you can see the state the exact predicate inferred. `status`
-reports which path `sasa` actually took, so a panel can say so, and
-`area` still agrees with `sasa(mol; n_occ = n, n_exp = n, probe = probe)[1][i]` in every case.
-
 # Arguments
 - `mol`: molecule to sample.
 - `i`: atom index (column of `coords_cartesian(mol)`).

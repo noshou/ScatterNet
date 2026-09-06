@@ -1,1 +1,3 @@
-*.toml linguist-detectable
+# GitHub Linguist overrides.
+*.toml         linguist-detectable=true
+Manifest.toml  linguist-generated=false

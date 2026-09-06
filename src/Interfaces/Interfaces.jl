@@ -38,7 +38,7 @@ function lookup end
 abstract type FormFactorSource end
 
 """
-    form_factor_table(energy::Real, ions, qvals) -> FF
+    form_factor_table([src::FormFactorSource,] energy::Real, ions, qvals) -> FF
 
 Build a form-factor container for `ions` at one photon `energy` over the
 `qvals` grid — one row per unique ion, aligned to the container's q index.
@@ -46,7 +46,12 @@ The concrete container type (`FormFactorXrayDB.FF`) and the work of populating
 it belong to the backend; this is the generic entry point every consumer
 calls.
 
+`src` selects the backend, mirroring `Molecule.create`'s `radii_source`; it
+lets a caller (or a test) swap in a stub without a live xraydb environment.
+Omitting it defaults to `FormFactorSourceXrayDB()`.
+
 # Arguments
+- `src`: the form-factor backend to query (optional).
 - `energy`: photon energy in eV.
 - `ions`: vector of ion strings.
 - `qvals`: vector of q values in Å⁻¹.

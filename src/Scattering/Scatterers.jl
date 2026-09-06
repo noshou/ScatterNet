@@ -1,19 +1,14 @@
 # Per-species partial-wave terms: one function per scatterer species in
 # `A_total(q) = A_vac(q) - dns*A_ex(q) + dro*A_sh(q)` (see the `Scattering`
 # docstring, section 5/6). Each builds that species' `(N, Q)` amplitude, hands
-# it to the shared `compute_B_lm`, and returns the multipoles alongside the
-# species' own diagonal term.
-using ..Interfaces: Interfaces
+# it to the shared `compute_B_lm`, and returns just that species' multipoles.
+using ..Interfaces: Interfaces, FormFactorSource, FormFactorSourceXrayDB
 using ..Molecule.SASA: SASA
 using ..Molecule.Molecules: Molecules, Molecule
 
 """
 Hydration-shell thickness in Å: how far the perturbed-density water layer
-extends beyond the solvent-accessible surface.
-
-`3.0` is the CRYSOL convention, roughly one water diameter. It sets only the
-dummies' nominal volume; the excess density that volume carries is the fit
-parameter `dro`, so an imperfect thickness is absorbed rather than propagated.
+extends beyond the solvent-accessible surface. (CRYSOL default).
 """
 const SHELL_THICKNESS = 3.0
 
@@ -27,20 +22,12 @@ A uniform sphere of volume `v_i`, approximated by the Gaussian of equal volume:
 at `q -> 0` it scatters as `v_i`, decaying as a Gaussian whose width is set by
 `v_i^(1/3)`.
 
-The amplitude is a *volume*, not an electron count -- the density is left out
-because that is exactly what `dns` and `dro` are fit for. Both carry `e·Å⁻³`,
-but at scales two orders apart, which matters for priors: `dns ≈ 0.334` (full
-bulk-water density, since the excluded-volume term subtracts all the solvent an
-atom displaces) against `dro ≈ 0.03` (the shell's *excess over* bulk, ~9% of
-it). Those are CRYSOL's own `--dns`/`--dro` defaults.
-
 # Arguments
 - `vols::AbstractVector{<:Real}`, length `N`: per-dummy volume in Å³, `>= 0`.
 - `qvals::AbstractVector{<:Real}`, length `Q`: momentum-transfer grid in Å⁻¹.
 
 # Returns
 -   `Matrix{Float64}`, `(N, Q)`, in [`compute_B_lm`](@ref)'s `f_atoms` layout.
-    Real, so `compute_B_lm` builds one channel -- dummies have no anomalous `f''`.
 """
 function _gaussian_dummy(
     vols::AbstractVector{<:Real}, qvals::AbstractVector{<:Real}
@@ -51,125 +38,117 @@ function _gaussian_dummy(
 end
 
 """
-    vacuo(mol, qvals, partials, lMax, ions, energy, _CHUNK) ->
-    Tuple{AbstractArray{<:Complex,3}, AbstractVector{<:Real}}
+    vacuo(mol, qvals, lMax, ions, energy, _CHUNK; form_factor_source) ->
+    AbstractArray{<:Complex,3}
 
 Vacuum term: the real atoms of `mol` with no solvent at all.
 
-`B_vac` and `S_vac,vac(q) = 4π Σ_lm w_lm |B_lm(q)|²`. The amplitude is the true
-X-ray form factor per atom, pulled through the `Interfaces` facade at photon
-energy `energy`; near an absorption edge it is complex (`f0 + f' + i*f''`), so
-`compute_B_lm` returns two channels here where the dummy species return one.
+`B_vac`, the `(C, K, Q)` multipoles feeding `S_vac,·` downstream. The amplitude
+is the true X-ray form factor per atom, pulled through the `Interfaces` facade
+at photon energy `energy`; near an absorption edge it is complex (`f0 + f' + i*f''`),
+so `compute_B_lm` returns two channels here where the dummy species return one.
 
 # Arguments
 -   `mol`: the molecule; only its spherical coordinates are used.
 -   `qvals::AbstractVector{<:Real}`, length `Q`: momentum-transfer grid in Å⁻¹.
--   `partials::Vector{Float64}`: `partial_wave_weights(lMax)`, passed in so the
-    caller builds it once and shares it across every species.
 -   `lMax::Integer`: maximum spherical harmonic degree.
 -   `ions::Vector{String}`: ion/element string per atom, i.e. `elms(mol)`.
 -   `energy::Float64`: photon energy in eV.
 -   `_CHUNK::UInt64`: atoms processed per pass inside [`compute_B_lm`](@ref).
 
+# Keywords
+-   `form_factor_source::FormFactorSource = FormFactorSourceXrayDB()`: the
+    form-factor backend, mirroring `Molecule.create`'s `radii_source`. The
+    default needs the live xraydb extension; a stub subtype lets this be
+    exercised without one.
+
 # Returns
--   `(B_lm, S)`: the `(C, K, Q)` multipoles and this ' own `(Q,)` diagonal term.
+-   `B_lm::AbstractArray{<:Complex,3}`, `(C, K, Q)` in [`compute_B_lm`](@ref).
 """
 function vacuo(
     mol::Molecule,
     qvals::AbstractVector{<:Real},
-    partials::Vector{Float64},
     lMax::Integer,
     ions::Vector{String},
     energy::Float64,
-    _CHUNK::UInt64
-)::Tuple{AbstractArray{<:Complex,3},AbstractVector{<:Real}}
+    _CHUNK::UInt64;
+    form_factor_source::FormFactorSource = FormFactorSourceXrayDB()
+)::AbstractArray{<:Complex,3}
     crd = Molecules.coords_spherical(mol)
-    tbl = Interfaces.form_factor_table(energy, ions, qvals)
+    tbl = Interfaces.form_factor_table(form_factor_source, energy, ions, qvals)
     amp = Interfaces.form_factors(tbl, ions, qvals)
-    blm = compute_B_lm(crd, qvals, amp, lMax, _CHUNK)
-    return (blm, self_scatter(blm, partials))
+    return compute_B_lm(crd, qvals, amp, lMax, _CHUNK)
 end
 
 """
-    excluded(mol, qvals, partials, lMax, _CHUNK) ->
-    Tuple{AbstractArray{<:Complex,3}, AbstractVector{<:Real}}
+    excluded(mol, qvals, lMax, _CHUNK) -> AbstractArray{<:Complex,3}
 
-Excluded-volume term: one Gaussian dummy per atom, at the atom's own position. 
-`B_ex` and `S_ex,ex(q)`. Bulk solvent cannot occupy the space an atom already fills, 
-so the volume 
-each atom displaces has to be subtracted from the amplitude before squaring.
-Every atom displaces solvent whether or not it is on the surface, so this runs
-over the full molecule, unlike [`hydration`](@ref).
+Excluded-volume term: one Gaussian dummy per atom, at the atom's own position.
+`B_ex`, feeding `S_ex,·` downstream. Bulk solvent cannot occupy the space an
+atom already fills, so the volume each atom displaces has to be subtracted from 
+the amplitude before squaring. Every atom displaces solvent whether or not it is
+on the surface, so this runs over the full molecule, unlike [`hydration`](@ref).
 
 # Arguments
 - `mol`: the molecule; its spherical coordinates and per-atom volumes are used.
 - `qvals::AbstractVector{<:Real}`, length `Q`: momentum-transfer grid in Å⁻¹.
-- `partials::Vector{Float64}`: `partial_wave_weights(lMax)`.
 - `lMax::Integer`: maximum spherical harmonic degree.
 - `_CHUNK::UInt64`: atoms processed per pass inside [`compute_B_lm`](@ref).
 
 # Returns
--   `(B_lm, S)`: as [`vacuo`](@ref), but with `C = 1` -- a dummy sphere's
+-   `B_lm`: as [`vacuo`](@ref), but with `C = 1` a dummy sphere's
     amplitude is real, so there is no `f''` channel.
 """
 function excluded(
     mol::Molecule,
     qvals::AbstractVector{<:Real},
-    partials::Vector{Float64},
     lMax::Integer,
     _CHUNK::UInt64
-)::Tuple{AbstractArray{<:Complex,3},AbstractVector{<:Real}}
+)::AbstractArray{<:Complex,3}
     crd = Molecules.coords_spherical(mol)
     amp = _gaussian_dummy(Molecules.vols(mol), qvals)
-    blm = compute_B_lm(crd, qvals, amp, lMax, _CHUNK)
-    return (blm, self_scatter(blm, partials))
+    return compute_B_lm(crd, qvals, amp, lMax, _CHUNK)
 end
 
 """
-    hydration(mol, qvals, partials, lMax, _CHUNK; thickness, probe, n_target, classes) ->
-    Tuple{AbstractArray{<:Complex,3}, AbstractVector{<:Real}}
+    hydration(mol, qvals, lMax, _CHUNK; thickness, probe, n_target, classes) ->
+    AbstractArray{<:Complex,3}
 
 Hydration-shell term: a Gaussian dummy on every accessible surface point.
 
 Dummies come from [`SASA.shell_points`](@ref), each carrying the
 `area * thickness` slab of shell it stands for, so the cloud tiles the layer
-rather than summarising it. This is CRYSOL 3's model (`--shell water`, dummy
-water beads) rather than classic CRYSOL's angular envelope (`--shell
-directional`), for the reason CRYSOL 3 gives: an envelope is single-valued in
-`r` per direction, so it cannot represent a concave surface or a cavity. The
-budget is global (see [`SASA.SHELL_POINTS`](@ref)), so this term's cost does not
-grow with the molecule.
+rather than generalizing an envlope around it.
 
 
 # Arguments
 - `mol`: the molecule; its accessible surface is used, not its atom positions.
 - `qvals::AbstractVector{<:Real}`, length `Q`: momentum-transfer grid in Å⁻¹.
-- `partials::Vector{Float64}`: `partial_wave_weights(lMax)`.
 - `lMax::Integer`: maximum spherical harmonic degree.
 - `_CHUNK::UInt64`: dummies processed per pass inside [`compute_B_lm`](@ref).
 
 # Keywords
 - `thickness::Float64 = SHELL_THICKNESS`: shell thickness in Å; `> 0`.
 - `probe::Float64 = 1.4`: solvent probe radius, forwarded to `shell_points`.
-- `n_target::Int = SASA.SHELL_POINTS`: total dummies, the analogue of CRYSOL's
-`--fb`. Runtime is linear in it; each dummy's width is `(area/n_target·Δ)^(1/3)`,
-so at the default that width, the point spacing and `thickness` all agree.
+- `n_target::Union{Nothing,Int} = nothing`: total shell dummies, the analogue of
+CRYSOL's `--fb`. `nothing` lets `SASA.shell_points` size the cloud from the
+accessible area (`≈ area / SASA.SHELL_AREA_PER_POINT`, floored at
+`SASA.SHELL_MIN_POINTS`); pass an `Int` to pin it. Runtime is linear in it.
 
 # Returns
--   `(B_lm, S)`: as [`excluded`](@ref) (`C = 1`). A molecule with no accessible
-    surface yields an all-zero `B_lm` and `S`, rather than an error.
+-   `B_lm`: as [`excluded`](@ref) (`C = 1`). A molecule with no accessible
+    surface yields an all-zero `B_lm`, rather than an error.
 """
 function hydration(
     mol::Molecule,
     qvals::AbstractVector{<:Real},
-    partials::Vector{Float64},
     lMax::Integer,
     _CHUNK::UInt64;
     thickness::Float64           = SHELL_THICKNESS,
     probe::Float64               = 1.4,
     n_target::Union{Nothing,Int} = nothing,
     classes                      = (SASA.CONVEX, SASA.CONCAVE)
-)::Tuple{AbstractArray{<:Complex,3},AbstractVector{<:Real}}
+)::AbstractArray{<:Complex,3}
     thickness > 0.0 || throw(ArgumentError("hydration: thickness must be > 0"))
     isempty(classes) && throw(ArgumentError("hydration: classes must be non-empty"))
 
@@ -177,6 +156,5 @@ function hydration(
     keep = findall(c -> c in classes, class)
     crd = Molecules.to_spherical(pts[:, keep])
     amp = _gaussian_dummy(area[keep] .* thickness, qvals)
-    blm = compute_B_lm(crd, qvals, amp, lMax, _CHUNK)
-    return (blm, self_scatter(blm, partials))
+    return compute_B_lm(crd, qvals, amp, lMax, _CHUNK)
 end

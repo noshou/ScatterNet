@@ -1,18 +1,7 @@
 # Visual check for the hydration-shell dummy cloud `SASA.shell_points`
-# builds -- every solvent-accessible sample point becomes one dummy, so the
+# builds; every solvent-accessible sample point becomes one dummy, so the
 # shell is a resolved layer over the molecular surface rather than one marker
-# per exposed atom. Independent of `visualize/sasa_vis.jl` -- that file is
-# about the raw occlusion machinery (`SASA._occluded`/`SASA._classify`); this
-# one is about what `Scattering.hydration` actually places on top of it, so it
-# defines its own scene and drawing helpers rather than reusing that file's.
-#
-# An earlier version drew one dummy per exposed atom, at its SASA patch
-# centroid. That collapse measured 59% error in S_sh against the resolved
-# cloud, and `sasa` no longer computes the centroids it needed.
-#
-# Every scene uses `HydroRadii`, a test-only `RadiiSource` defined below, so
-# the geometry is exact and reproducible instead of depending on the
-# atomic-radii database.
+# per exposed atom. 
 #
 # Run with:
 #   julia --project=visualize -e 'include("visualize/sasa_hydro_vis.jl"); vis_sasa_hydro()'
@@ -145,8 +134,7 @@ end
 
 Print the hydration-shell dummy cloud on [`packed_cluster_scene`](@ref): buried
 vs exposed atoms, and how the cloud behaves as the global budget varies. The
-area column should stay flat -- thinning changes resolution, not the surface
-being represented. Budgets shown bracket CRYSOL's `--fb` range (`F(10) = 55` to
+area column should stay flat Budgets shown bracket CRYSOL's `--fb` range (`F(10) = 55` to
 `F(18) = 2584`, default `F(17) = 1597`).
 """
 function sasa_hydro_report(; probe::Float64 = 1.4, n_target::Union{Nothing,Int} = nothing)
@@ -215,24 +203,21 @@ function sasa_hydro_figure(; n_target::Union{Nothing,Int} = nothing, n_show::Int
         titlesize = 15, aspect = :data, azimuth = 1.1π,
         xlabel = "x", ylabel = "y", zlabel = "z")
 
-    # atom spheres: small, uniform, low-alpha -- reads as the cluster's shape
-    # rather than competing with the dummies for attention. The two
-    # highlighted atoms get a stronger alpha so their sample points land on
-    # something visible.
+    # atom spheres: small, uniform, low-alpha.
     for i in 1:natoms
         ρ = Float32(rads[i] + probe)
         c = Point3f(crds[1, i], crds[2, i], crds[3, i])
         mesh!(ax, Sphere(c, ρ); color = (ATOM_COLOR, i in highlight ? 0.35 : 0.10),
-              transparency = true, shading = NoShading)
+                transparency = true, shading = NoShading)
     end
 
     # the shell itself: one marker per accessible point, i.e. one per dummy
     # `Scattering.hydration` will place. Every point of a given atom carries the
     # same area, so a uniform marker size is the honest rendering.
     bead_colour = Dict(SASA.CONVEX => DUMMY_COLOR, SASA.CONCAVE => CONCAVE_COLOR,
-                       SASA.CAVITY => CAVITY_COLOR)
+                        SASA.CAVITY => CAVITY_COLOR)
     scatter!(ax, [Point3f(shell[1, k], shell[2, k], shell[3, k]) for k in axes(shell, 2)];
-             color = [bead_colour[c] for c in shell_cls], markersize = 5)
+            color = [bead_colour[c] for c in shell_cls], markersize = 5)
 
     # raw sample points, only on the two highlighted atoms
     for i in highlight
@@ -250,13 +235,13 @@ function sasa_hydro_figure(; n_target::Union{Nothing,Int} = nothing, n_show::Int
             MarkerElement(color = EXPOSED_COLOR, marker = :circle, markersize = 10),
             MarkerElement(color = OCCLUDED_COLOR, marker = :circle, markersize = 10)]
     Legend(fig[2, 1], els,
-           [   "atom (expanded radius)",
-               @sprintf("bead: convex (%.3f A^2 each)",
+            [   "atom (expanded radius)",
+                @sprintf("bead: convex (%.3f A^2 each)",
                         isempty(shell_area) ? 0.0 : first(shell_area)),
-               "bead: concave", "bead: cavity",
-               "sample point: exposed (highlighted atoms only)",
-               "sample point: occluded (highlighted atoms only)"];
-           orientation = :horizontal, framevisible = false, nbanks = 2, labelsize = 12)
+                "bead: concave", "bead: cavity",
+                "sample point: exposed (highlighted atoms only)",
+                "sample point: occluded (highlighted atoms only)"];
+            orientation = :horizontal, framevisible = false, nbanks = 2, labelsize = 12)
     return fig
 end
 
@@ -269,10 +254,10 @@ exposed atom to show the underlying mechanism. Blocks until the window is
 closed.
 
 # Keywords
-- `n_target`: global dummy budget; `nothing` derives it from accessible area.
-  CRYSOL's `--fb` analogue, and what `Scattering.hydration` pays for.
-- `n_show`: sample points drawn for the two highlighted atoms only.
-- `probe`: solvent probe radius.
+-   `n_target`: global dummy budget; `nothing` derives it from accessible area.
+                CRYSOL's `--fb` analogue, and what `Scattering.hydration` pays for.
+-   `n_show`:   sample points drawn for the two highlighted atoms only.
+-   `probe`:    solvent probe radius.
 """
 vis_sasa_hydro(; n_target::Union{Nothing,Int} = nothing, n_show::Int = 400, probe::Float64 = 1.4) =
     wait(display(sasa_hydro_figure(; n_target, n_show, probe)))
