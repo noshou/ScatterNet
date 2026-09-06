@@ -1,6 +1,7 @@
-# Exercises src/AtomicRadii/AtomicRadii.jl: ion-string parsing, the ion_key
-# round-trip, the raw table lookups, and the resolve_one fallback chain.
-using .AtomicRadii: Ion, tryparse_ion, ion_key, ion_radius, element_radius, nearest_ion, resolve_one, _resolve_all, AtomicRadiiSource
+# Exercises src/Interfaces/AtomicRadii/AtomicRadii.jl: ion-string parsing, the
+# ion_key round-trip, the raw table lookups, and the resolve_one fallback chain.
+using ScatterNet.Interfaces.AtomicRadii: Ion, tryparse_ion, ion_key, ion_radius,
+    element_radius, nearest_ion, resolve_one, _resolve_all, AtomicRadiiSource
 
 lookup_one(ion) = _resolve_all([ion])[1][2]
 

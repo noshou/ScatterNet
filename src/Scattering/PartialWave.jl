@@ -1,6 +1,5 @@
 using .SphFuncs: sphHarm, sphBess
 
-
 """
     _deg_contrib(f_t, j_deg, Y_l) -> AbstractMatrix{<:Number}
 
@@ -104,7 +103,8 @@ function partial_wave_weights(lMax::Integer)::Vector{Float64}
 end
 
 """
-    compute_B_lm(θ, φ, r, qvals, f_atoms, lMax; backend=Array) -> AbstractArray{<:Complex,3}
+    compute_B_lm(coords_sph, qvals, f_atoms, lMax; _CHUNK, backend=Array)
+    -> AbstractArray{<:Complex,3}
 
 Compute `B_lm(q) = Σ_i f_atoms[i](q) * j_l(q*r_i) * conj(Y_lm(θ_i, φ_i))`.
 
@@ -114,14 +114,17 @@ excluded-volume/shell amplitudes for the other terms) — this is the
 shared low-level primitive every `S_(a,b)` term downstream is built from.
 
 # Arguments
-    -   `θ, φ, r::AbstractVector{<:Real}`, length `N`: atomic angular/radial
-        coordinates.
+    -   `coords_sph::AbstractMatrix{<:Real}`, size `(3, N)`: per-atom spherical
+        coordinates in the column-per-atom layout `Molecules.coords_spherical`
+        returns — row 1 is `r`, row 2 is `θ`, row 3 is `φ`. Passed straight
+        through; the `(θ, φ)` rows go to `sphHarm` as a `(2, chunk)` block and
+        the `r` row to `sphBess`, with no unpacking into loose vectors.
     -   `qvals::AbstractVector{<:Real}`, length `Q`: momentum transfer grid.
     -   `f_atoms::AbstractMatrix{<:Number}`, size `(N, Q)`: per-atom scattering
         amplitude, already evaluated on `qvals`. Real or complex — a purely
         real matrix is handled directly, with no need to pre-cast it to complex.
     -   `lMax::Integer`: maximum spherical harmonic degree. Must be non-negative.
-    -   `_CHUNK::Integer`: number of atoms to process in one pass.
+    -   `_CHUNK::UInt64`: number of atoms to process in one pass.
     -   `backend::Type{<:AbstractArray} = Array`: array type used for the
         per-chunk compute buffers. Pass e.g. `CUDA.CuArray` to run on GPU.
 
@@ -134,16 +137,14 @@ shared low-level primitive every `S_(a,b)` term downstream is built from.
     —   they must not be recombined into one complex `B_lm`.
 """
 function compute_B_lm(
-    θ::AbstractVector{<:Real},
-    φ::AbstractVector{<:Real},
-    r::AbstractVector{<:Real},
+    coords_sph::AbstractMatrix{<:Real},
     qvals::AbstractVector{<:Real},
     f_atoms::AbstractMatrix{<:Number},
-    lMax::Integer;
+    lMax::Integer,
     _CHUNK::UInt64,
     backend::Type{<:AbstractArray}=Array
 )::AbstractArray{<:Complex,3}
-    
+
     # _CHUNK == 0 would make the `1:_CHUNK:N` range below step by zero,
     # looping forever instead of raising.
     if _CHUNK == 0
@@ -152,12 +153,17 @@ function compute_B_lm(
 
     lMax < 0 && throw(ArgumentError("compute_B_lm: lMax must be non-negative"))
 
-    N = length(θ)
-    (length(φ) == N && length(r) == N) ||
-        throw(ArgumentError("compute_B_lm: θ, φ, r must have the same length"))
-    size(f_atoms, 1) == N ||
-        throw(ArgumentError("compute_B_lm: f_atoms must have N rows matching θ/φ/r"))
+    # `coords_sph` is the column-per-atom spherical form straight from
+    # `Molecules.coords_spherical`: 3 rows, `(r, θ, φ)` in that order.
+    size(coords_sph, 1) == 3 || throw(ArgumentError(
+        "compute_B_lm: coords_sph must be a (3, N) matrix with rows (r, θ, φ), " *
+        "as returned by Molecules.coords_spherical; got $(size(coords_sph, 1)) rows"))
+    N = size(coords_sph, 2)
+    r = view(coords_sph, 1, :)   # (θ, φ) are sliced per-chunk straight from `coords_sph`
+
     Q = length(qvals)
+    size(f_atoms, 1) == N ||
+        throw(ArgumentError("compute_B_lm: f_atoms must have N rows matching coords_sph's columns"))
     size(f_atoms, 2) == Q ||
         throw(ArgumentError("compute_B_lm: f_atoms must have Q columns matching qvals"))
 
@@ -177,10 +183,15 @@ function compute_B_lm(
     # bounds that intermediate memory to O(_CHUNK*Q*lMax) regardless of N.
     for start in 1:_CHUNK:N
         stop = min(start + _CHUNK - 1, N)
-        idx = start:stop
+        # `_CHUNK` is a `UInt64`, so `start:stop` would be a UInt64 range;
+        # reindexing the nested `view(coords_sph, 2:3, idx)` against one
+        # underflows to `typemax(UInt64)` and throws. Keep the index Int.
+        idx = Int(start):Int(stop)
 
-        Y = sphHarm(lMax, view(θ, idx), view(φ, idx))  # (N_reduced, chunk), complex
-        j = sphBess(qvals, lMax, view(r, idx))          # (lMax+1, Q, chunk), real
+        # rows 2:3 of `coords_sph` are (θ, φ): handed to `sphHarm` as a
+        # (2, chunk) angle block, not split into loose vectors.
+        Y = sphHarm(Int(lMax), view(coords_sph, 2:3, idx))  # (N_reduced, chunk), complex
+        j = sphBess(view(r, idx), qvals, Int(lMax))         # (lMax+1, Q, chunk), real
 
         # `_deg_contrib` is called lMax+1 times per channel per chunk,
         # so hoisting the conjugation out of that loop saves (lMax+1)x work.

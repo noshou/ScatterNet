@@ -62,6 +62,24 @@ function sphHarm(lMax::Int, θ::AbstractArray{<:Real}, φ::AbstractArray{<:Real}
 end
 
 """
+    sphHarm(lMax::Int, angles::AbstractMatrix{<:Real}) -> Matrix{ComplexF64}
+
+As [`sphHarm`](@ref) above, but reading the angles from a `(2, N)` matrix whose
+rows are `θ` and `φ` and whose columns are points — the column-per-atom layout
+`Molecules.coords_spherical` produces, sliced to its two angular rows. Exactly
+`sphHarm(lMax, view(angles, 1, :), view(angles, 2, :))`.
+
+# Arguments
+- `lMax`: maximum degree, `lMax >= 0`.
+- `angles`: `(2, N)` real matrix; row 1 is `θ`, row 2 is `φ`.
+"""
+function sphHarm(lMax::Int, angles::AbstractMatrix{<:Real})::Matrix{ComplexF64}
+    size(angles, 1) == 2 ||
+        throw(SphHarmError("angles matrix must have 2 rows (θ, φ); got $(size(angles, 1))"))
+    return sphHarm(lMax, view(angles, 1, :), view(angles, 2, :))
+end
+
+"""
     sphBess(r::AbstractArray{<:Real}, q::AbstractArray{<:Real}, lMax::Int) -> Array{Float64,3}
 
 Spherical Bessel functions j_l for `l = 0..lMax` over the outer product `q ⊗ r`,

@@ -1,15 +1,22 @@
 """
 X-ray form factors `f(q,E) = f0(s) + f1(E) + i f2(E)` from the Python `xraydb`
-package. `py/FormFact_py.py` holds the tier logic.
+package. `py/FormFact_py.py` (bundled alongside this file) holds the tier logic.
 
 Everything here is pure Julia; the one function that actually crosses into
 Python, [`compute_form_factors`](@ref), is supplied by the `FormFactorXrayDBExt`
 package extension and only exists once `PythonCall` is loaded. Consumers that
 just want the scattering geometry therefore never pull in a Python stack.
+
+The public trio ([`Interfaces.form_factor_table`](@ref) /
+[`Interfaces.form_factors`](@ref) / [`Interfaces.form_factor_log`](@ref)) are
+methods on the `Interfaces` generics; nothing here is meant to be reached as
+`FormFactorXrayDB.<name>` from outside `Interfaces` except through the parent
+facade.
 """
 module FormFactorXrayDB
 
-using ...Interfaces: FormFactorSource
+import ..Interfaces
+using  ..Interfaces: FormFactorSource
 
 export FF, FormFactorError, FormFactorSourceXrayDB, compute_form_factors
 
@@ -37,7 +44,8 @@ Implemented by the `FormFactorXrayDBExt` extension, which loads with
 `PythonCall`. Without it this catch-all method is the only one defined and it
 raises [`FormFactorError`](@ref) -- it is deliberately less specific than the
 extension's typed method, so the real implementation wins on dispatch without
-redefining anything.
+redefining anything. This name is the backend seam the extension extends; it
+is not part of the `Interfaces` public surface.
 
 # Arguments
 - `ions`: vector of ion strings.
@@ -49,7 +57,7 @@ compute_form_factors(args...) = throw(FormFactorError(
     "FormFactorXrayDBExt extension (and make sure PythonCall is in your environment)"))
 
 """
-    create(energy::Real, ions, qvals) -> FF
+    Interfaces.form_factor_table(energy::Real, ions, qvals) -> FF
 
 Build an [`FF`](@ref) container for `ions` at one `energy` (eV) over the `qvals`
 (Å⁻¹) grid. Thin wrapper over [`compute_form_factors`](@ref).
@@ -59,24 +67,35 @@ Build an [`FF`](@ref) container for `ions` at one `energy` (eV) over the `qvals`
 - `ions`: vector of ion strings.
 - `qvals`: vector of q values in Å⁻¹.
 """
-create(energy::Real, ions, qvals)::FF =
+Interfaces.form_factor_table(energy::Real, ions, qvals)::FF =
     compute_form_factors(collect(String, ions), energy, collect(Float64, qvals))
 
-"Construction-time log (one line per non-full ion)."
-log(t::FF)::Vector{String} = t.log
+"""
+    Interfaces.form_factor_log(t::FF) -> Vector{String}
+
+Construction-time log (one line per non-full ion).
+"""
+Interfaces.form_factor_log(t::FF)::Vector{String} = t.log
 
 """
-    lookup(t::FF, ions, qvals) -> Vector{Tuple{String,Vector{ComplexF64}}}
+    Interfaces.form_factors(t::FF, ions, qvals) -> Matrix{ComplexF64}
 
-Rows for `ions` at `qvals`, drawn from container `t`; ions with no data are dropped.
-Throws [`FormFactorError`](@ref) if a queried q is not one of `t`'s grid points (exact match).
+Per-ion form-factor rows from container `t` as a `(length(ions), length(qvals))`
+matrix: row `i` is the form factor for `ions[i]`, its columns aligned to `qvals`
+in the order given. Pass the per-atom ion vector and the result drops straight
+into [`compute_B_lm`](@ref) as `f_atoms` — no intermediate mapping step.
+
+Throws [`FormFactorError`](@ref) if a queried q is not one of `t`'s grid points
+(exact match), or if any `ions[i]` is absent from `t` (a dummy site or an ion
+the backend could not resolve — see [`Interfaces.form_factor_log`](@ref)).
 
 # Arguments
-- `t`: form-factor container from [`create`](@ref) / [`compute_form_factors`](@ref).
-- `ions`: vector of ion strings to fetch.
+- `t`: form-factor container from [`Interfaces.form_factor_table`](@ref) / [`compute_form_factors`](@ref).
+- `ions`: ion strings to fetch, one per output row (typically one per atom).
 - `qvals`: vector of q values; each must match a grid point of `t` exactly.
 """
-function lookup(t::FF, ions::AbstractVector{<:AbstractString}, qvals::AbstractVector{<:Real})
+function Interfaces.form_factors(t::FF, ions::AbstractVector{<:AbstractString},
+                                 qvals::AbstractVector{<:Real})::Matrix{ComplexF64}
     idx = Vector{Int}(undef, length(qvals))
     @inbounds for i in eachindex(qvals)
         q = Float64(qvals[i])
@@ -84,14 +103,15 @@ function lookup(t::FF, ions::AbstractVector{<:AbstractString}, qvals::AbstractVe
         j == 0 && throw(FormFactorError("q=$q is not one of this container's q-points"))
         idx[i] = j
     end
-    out = Tuple{String,Vector{ComplexF64}}[]
-    for ion in ions
-        key = String(ion)
-        row = get(t.tbl, key, nothing)
-        row === nothing && continue
-        push!(out, (key, ComplexF64[row[k] for k in idx]))
+    f = Matrix{ComplexF64}(undef, length(ions), length(qvals))
+    @inbounds for (a, ion) in enumerate(ions)
+        row = get(t.tbl, String(ion), nothing)
+        row === nothing && throw(FormFactorError("ion \"$ion\" is not in this container"))
+        for (c, k) in enumerate(idx)
+            f[a, c] = row[k]
+        end
     end
-    return out
+    return f
 end
 
 end # module

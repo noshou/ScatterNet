@@ -3,7 +3,7 @@ using Aqua, JET
 using .SphFuncs: sphHarm, sphBess, legendre_sphPlm
 using .Molecules: create, coords_cartesian, coords_spherical, radii, vols, r_max,
                 elms, name, Molecule
-using .AtomicRadii: resolve_one, _resolve_all, tryparse_ion, ion_key, nearest_ion
+using ScatterNet.Interfaces.AtomicRadii: AtomicRadii, resolve_one, _resolve_all, tryparse_ion, ion_key, nearest_ion
 using ScatterNet.Molecule: SASA
 
 @testset "Aqua" begin
@@ -38,7 +38,8 @@ end
 
 @testset "type stability of the SASA entry point (@inferred)" begin
     m = create("t", ["o", "h", "h"], [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)])
-    @test (@inferred SASA.sasa(m; n_occ = 16, n_exp = 64, probe = 1.4)) isa Tuple{Vector{Float64},Matrix{Float64},Vector{Float64},Vector{Bool}}
+    @test (@inferred SASA.sasa(m; n_occ = 16, n_exp = 64, probe = 1.4)) isa Tuple{Vector{Float64},Vector{Bool}}
+    @test (@inferred SASA.shell_points(m; n_target = 64, probe = 1.4)) isa Tuple{Matrix{Float64},Vector{Float64},Vector{SASA.BeadClass}}
 end
 
 @testset "JET (focused type-stability analysis)" begin
@@ -76,14 +77,35 @@ end
 
     # the loop that runs once per atom must be completely clean
     @test isempty(_reports(SASA._sasa_loop!,
-        (   Vector{Float64}, Matrix{Float64}, Vector{Float64}, BitVector, TT,
-            Matrix{Float64}, Vector{Float64}, Float64, Vector{Vec3}, Vec3,
-            Float64, Float64, Int, Int, Float64)))
+        (   Vector{Float64}, BitVector, TT, Matrix{Float64}, Vector{Float64},
+            Float64, Vector{Vec3}, Float64, Int, Int, Float64)))
+
+    # `shell_points` crosses the same barrier for the same reason, and its loop
+    # must be just as clean -- it runs per atom AND per sample point.
+    @test isempty(_reports(SASA._shell_loop,
+        (   TT, Matrix{Float64}, Vector{Float64}, Float64, Vector{Vec3},
+            Float64, Int)))
+
+    @test isempty(_reports(SASA._ray_blocked,
+        (   NTuple{3,Float64}, Vec3, Vector{Int}, Matrix{Float64},
+            Vector{Float64}, Float64)))
+
+    @test isempty(_reports(SASA._prefix_thin, (Vector{Int}, Int, Int)))
+
+    @test isempty(_reports(SASA._class_loop,
+        (   TT, Matrix{Float64}, Matrix{Float64}, Matrix{Float64},
+            Vector{Float64}, Float64, Vector{Vec3})))
 
     # the entry point carries exactly the one barrier dispatch, and it is the
     # barrier -- not `inrange`, and not anything inside the per-atom loop.
     rs = _reports(SASA.sasa, (Molecule,))
     @test length(rs) <= 1
     @test all(r -> occursin("_sasa_loop!", sprint(show, r)), rs)
+
+    # two barriers here, not one: the sampling loop and the classification loop
+    rp = _reports(SASA.shell_points, (Molecule,))
+    @test length(rp) <= 2
+    @test all(r -> (t = sprint(show, r);
+                    occursin("_shell_loop", t) || occursin("_class_loop", t)), rp)
 end
 

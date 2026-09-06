@@ -5,12 +5,12 @@ module  Molecules
 
 import  ...Interfaces
 using   ...Interfaces: RadiiSource, lookup
-using   ...AtomicRadii: AtomicRadiiSource
+using   ...Interfaces: AtomicRadiiSource
 
 include("Cache.jl")
 
 export  Molecule, MoleculeError, create, coords_cartesian, coords_spherical,
-        radii, vols, r_max, elms, name
+        to_spherical, radii, vols, r_max, elms, name, n_atoms
 
 "Raised for malformed molecule input (empty or mismatched coords, missing radii)."
 struct MoleculeError <: Exception; msg::String end
@@ -21,11 +21,13 @@ Per-atom centered coordinates in both frames, with lazy `radii`/`vols`/`r_max`.
 
 Both coordinate frames are `(3, n)` matrices sharing a column index (the atom),
 so a single atom's data is one contiguous column in either frame; the spherical
-rows are `r`, `theta`, `phi` in that order.
+rows are `r`, `theta`, `phi` in that order. `_n` is the atom count, captured once
+at construction from the coordinate pass rather than recomputed on demand.
 """
 struct Molecule
     _name   :: String
     _elms   :: Vector{String}
+    _n      :: Int                   # atom count; set at construction, never recomputed
     _cart   :: Matrix{Float64}       # (3, n) centered (x, y, z)
     _sph    :: Matrix{Float64}       # (3, n) (r, theta, phi)
     _radii  :: Lazy{Vector{Float64}}
@@ -61,25 +63,42 @@ function _center(cs::Vector{NTuple{3,Float64}})::Matrix{Float64}
     return out
 end
 
-# theta = acos(z/r) in [0, π], phi = atan2(y, x). r = 0 (single atom) would give
-# 0/0, so clamp with rsafe; j_l(0) = 0 for l > 0 makes the angle irrelevant there.
 """
-    _geometry(c::Matrix{Float64}) -> Matrix{Float64}
+    to_spherical(c::AbstractMatrix{<:Real}) -> Matrix{Float64}
 
-Spherical `(r, theta, phi)` per column of `c` as a `(3, n)` matrix, with
-`theta = acos(z/r)` in `[0, π]` and `phi = atan(y, x)`. `r = 0` is handled
-without a `0/0`.
+Spherical `(r, theta, phi)` per column of the `(3, n)` cartesian matrix `c`,
+returned as a `(3, n)` matrix sharing `c`'s column index (the atom/point).
+`theta = acos(z/r)` lies in `[0, π]` and `phi = atan(y, x)` in `(-π, π]`.
+
+This is the transform behind [`coords_spherical`](@ref), exposed because the
+same conversion is needed for point sets that are not a molecule's atoms --
+notably the hydration-shell dummies, which sit out on the solvent-accessible
+surface rather than at nuclei, and which must reach `Scattering`'s `B_lm` in
+the same `(r, theta, phi)` layout.
+
+!!! warning "Does not centre"
+    `c` is converted as given; no centroid is subtracted. That is deliberate:
+    every point set entering a multipole expansion has to share one origin, so
+    re-centring a subset on its own centroid would silently misplace it
+    relative to the molecule. Callers wanting a centred frame must centre
+    first, as [`create`](@ref) does.
+
+`r = 0` (a point exactly at the origin -- a single-atom molecule, say) would
+make `theta` a `0/0`; it is handled without one. The angle is arbitrary there
+and unobservable downstream, since `j_l(0) = 0` for every `l > 0`.
 
 # Arguments
-- `c`: `(3, n)` centered coordinate matrix.
+- `c`: `(3, n)` cartesian coordinates; rows are `x`, `y`, `z`.
 """
-function _geometry(c::Matrix{Float64})::Matrix{Float64}
+function to_spherical(c::AbstractMatrix{<:Real})::Matrix{Float64}
+    size(c, 1) == 3 || throw(MoleculeError(
+        "to_spherical: expected a (3, n) matrix with rows (x, y, z); got $(size(c, 1)) rows"))
     n = size(c, 2)
     out = Matrix{Float64}(undef, 3, n)
     @inbounds for j in 1:n
-        x = c[1, j]; y = c[2, j]; z = c[3, j]
+        x = Float64(c[1, j]); y = Float64(c[2, j]); z = Float64(c[3, j])
         rj = sqrt(x * x + y * y + z * z)
-        rsafe = rj > 0.0 ? rj : 1.0
+        rsafe = rj > 0.0 ? rj : 1.0   # see the r = 0 note above
         out[1, j] = rj
         out[2, j] = acos(clamp(z / rsafe, -1.0, 1.0))
         out[3, j] = atan(y, x)
@@ -150,14 +169,15 @@ frames computed now, `radii`/`vols`/`r_max` on first access.
 function create(name::AbstractString, elms::AbstractVector{<:AbstractString}, coords;
                 radii_source::RadiiSource = AtomicRadiiSource())
     cs = _to_tuples(coords)
-    length(cs) == length(elms) || throw(MoleculeError("coords and elms length mismatch"))
+    n  = length(cs)
+    n == length(elms) || throw(MoleculeError("coords and elms length mismatch"))
     es = collect(String, elms)
     cart = _center(cs)
-    sph  = _geometry(cart)
+    sph  = to_spherical(cart)
     rad  = Lazy{Vector{Float64}}(() -> _compute_radii(radii_source, es))
     vol  = Lazy{Vector{Float64}}(() -> sphere_volume.(force(rad)))
     rmax = Lazy{Float64}(() -> maximum(force(rad)))
-    return Molecule(String(name), es, cart, sph, rad, vol, rmax)
+    return Molecule(String(name), es, n, cart, sph, rad, vol, rmax)
 end
 
 "`(3, n)` centroid-centered cartesian coordinates; rows are `x`, `y`, `z`."
@@ -165,6 +185,9 @@ coords_cartesian(m::Molecule)::Matrix{Float64} = m._cart
 
 "`(3, n)` spherical coordinates about the centroid; rows are `r`, `theta`, `phi`."
 coords_spherical(m::Molecule)::Matrix{Float64} = m._sph
+
+"Number of atoms; `O(1)`, captured at construction."
+n_atoms(m::Molecule)::Int = m._n
 
 "Per-atom radius; resolved and cached on first call."
 radii(m::Molecule)::Vector{Float64}  = force(m._radii)

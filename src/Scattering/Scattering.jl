@@ -1,9 +1,11 @@
 """
 Scattering primitives implemented so far: spherical harmonics / Bessel
-functions (`SphFuncs`) and X-ray form factors (`FormFactorXrayDB`); the
-`B_lm`/`S(q)` combination described below is the model this module is being
-built toward, not yet code that lives here. Depends on the top-level
-`Interfaces` markers.
+functions (`SphFuncs`) and the partial-wave `B_lm`/`S(q)` machinery
+(`PartialWave`); the full `B_lm`/`S(q)` combination described below is the
+model this module is being built toward, not yet code that lives here. X-ray
+form factors are no longer here — they live under the facade as
+`Interfaces.FormFactorXrayDB` and are reached through `Interfaces`. Depends on
+the top-level `Interfaces` markers.
 
 # Background
 
@@ -150,9 +152,9 @@ built toward, not yet code that lives here. Depends on the top-level
 module Scattering
 
 include("SphFuncs.jl")
-include("FormFactorXrayDB.jl")
+include("PartialWave.jl")
+include("Scatterers.jl")
 
 using .SphFuncs: SphFuncs
-using .FormFactorXrayDB: FormFactorXrayDB
 
 end # module

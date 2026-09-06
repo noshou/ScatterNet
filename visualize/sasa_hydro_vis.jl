@@ -1,10 +1,14 @@
-# Visual check for the hydration-shell dummy placement `SASA.sasa` derives
-# from its Shrake-Rupley patch geometry (centroid + patch_rg2 per exposed
-# atom). Independent of `visualize/sasa_vis.jl` -- that file is about the
-# raw occlusion machinery (`SASA._occluded`/`SASA._classify`); this one is
-# about what a hydration-shell dummy generator would actually place on top
-# of it, so it defines its own scene and drawing helpers rather than reusing
-# that file's.
+# Visual check for the hydration-shell dummy cloud `SASA.shell_points`
+# builds -- every solvent-accessible sample point becomes one dummy, so the
+# shell is a resolved layer over the molecular surface rather than one marker
+# per exposed atom. Independent of `visualize/sasa_vis.jl` -- that file is
+# about the raw occlusion machinery (`SASA._occluded`/`SASA._classify`); this
+# one is about what `Scattering.hydration` actually places on top of it, so it
+# defines its own scene and drawing helpers rather than reusing that file's.
+#
+# An earlier version drew one dummy per exposed atom, at its SASA patch
+# centroid. That collapse measured 59% error in S_sh against the resolved
+# cloud, and `sasa` no longer computes the centroids it needed.
 #
 # Every scene uses `HydroRadii`, a test-only `RadiiSource` defined below, so
 # the geometry is exact and reproducible instead of depending on the
@@ -97,6 +101,8 @@ end
 const EXPOSED_COLOR  = RGBf(1.00, 0.62, 0.13)   # warm/bright
 const OCCLUDED_COLOR = RGBf(0.24, 0.26, 0.32)   # dark/desaturated
 const DUMMY_COLOR    = RGBf(0.90, 0.15, 0.55)   # distinct from atoms and points
+const CONCAVE_COLOR  = RGBf(0.20, 0.55, 0.90)
+const CAVITY_COLOR   = RGBf(0.35, 0.80, 0.35)
 const ATOM_COLOR     = RGBf(0.55, 0.62, 0.75)
 
 """
@@ -135,29 +141,34 @@ end
 # --------------------------------------------------------------------------
 
 """
-    sasa_hydro_report(; probe = 1.4, n_exp = 4096) -> Nothing
+    sasa_hydro_report(; probe = 1.4, n_target = nothing) -> Nothing
 
-Print the patch geometry `SASA.sasa` derives for hydration-shell dummy
-placement on [`packed_cluster_scene`](@ref): how many atoms are buried vs
-exposed, total SASA, and the per-exposed-atom area/centroid/patch-radius
-table.
+Print the hydration-shell dummy cloud on [`packed_cluster_scene`](@ref): buried
+vs exposed atoms, and how the cloud behaves as the global budget varies. The
+area column should stay flat -- thinning changes resolution, not the surface
+being represented. Budgets shown bracket CRYSOL's `--fb` range (`F(10) = 55` to
+`F(18) = 2584`, default `F(17) = 1597`).
 """
-function sasa_hydro_report(; probe::Float64 = 1.4, n_exp::Int = 4096)
+function sasa_hydro_report(; probe::Float64 = 1.4, n_target::Union{Nothing,Int} = nothing)
     sc = packed_cluster_scene(; probe)
-    area, centroid, patch_rg2, exposed = SASA.sasa(sc.mol; n_exp, probe)
-    n_atoms = length(area)
-    println(sc.title, "  (probe = ", probe, ", n_exp = ", n_exp, ")")
-    @printf("  %d atoms: %d exposed (dummy sites), %d buried\n",
-            n_atoms, count(exposed), count(!, exposed))
+    area, exposed = SASA.sasa(sc.mol; probe)
+    println(sc.title, "  (probe = ", probe, ")")
+    @printf("  %d atoms: %d exposed, %d buried\n",
+            length(area), count(exposed), count(!, exposed))
     @printf("  total SASA %.3f A^2\n\n", sum(area))
-    for i in axes(centroid, 2)
-        exposed[i] || continue
-        @printf(
-            "  atom %3d: area %8.3f  centroid (% .3f, % .3f, % .3f)  patch radius %.3f A\n",
-            i, area[i], centroid[1, i], centroid[2, i], centroid[3, i],
-            sqrt(max(patch_rg2[i], 0.0))
-        )
+
+    @printf("  %-10s %-9s %-14s %-8s %-8s %-8s\n",
+            "n_target", "dummies", "shell area A^2", "convex", "concave", "cavity")
+    for n in (55, 233, 610, 1597, 2584)
+        pts, pa, cl = SASA.shell_points(sc.mol; probe, n_target = n)
+        @printf("  %-10d %-9d %-14.3f %-8d %-8d %-8d\n", n, size(pts, 2), sum(pa),
+                count(==(SASA.CONVEX), cl), count(==(SASA.CONCAVE), cl),
+                count(==(SASA.CAVITY), cl))
     end
+
+    pts, pa, _ = SASA.shell_points(sc.mol; probe, n_target)
+    @printf("\n  auto budget: %d dummies, %.4f A^2 each\n",
+            size(pts, 2), isempty(pa) ? 0.0 : first(pa))
     return nothing
 end
 
@@ -166,23 +177,27 @@ end
 # --------------------------------------------------------------------------
 
 """
-    sasa_hydro_figure(; n_exp = 4096, n_pts = 400, probe = 1.4) -> Figure
+    sasa_hydro_figure(; n_target = nothing, n_show = 400, probe = 1.4) -> Figure
 
-Hydration-shell dummy placement on a real packed object
-([`packed_cluster_scene`](@ref), ~80 atoms): every exposed atom gets a dummy
-marker (its patch centroid from `SASA.sasa`, sized by its SASA area) so the
-result reads as an actual shell coating the cluster's outside, with its
-buried core visibly left uncoated.
+The hydration-shell dummy cloud on a real packed object
+([`packed_cluster_scene`](@ref), ~80 atoms): every accessible sample point from
+`SASA.shell_points` is drawn as one dummy, so the shell reads as a layer
+coating the cluster's outside with its buried core visibly left uncoated.
+
+Raw sample points for one exposed and one buried atom are overlaid in the
+exposed/occluded colours, so the cloud can be seen coming *from* the occlusion
+test rather than being asserted alongside it.
 
 Split out from [`vis_sasa_hydro`](@ref) so the plot can be assembled, saved
 or inspected without a window.
 """
-function sasa_hydro_figure(; n_exp::Int = 4096, n_pts::Int = 400, probe::Float64 = 1.4)
+function sasa_hydro_figure(; n_target::Union{Nothing,Int} = nothing, n_show::Int = 400, probe::Float64 = 1.4)
     sc = packed_cluster_scene(; probe)
     crds = Molecules.coords_cartesian(sc.mol)
     rads = Molecules.radii(sc.mol)
     natoms = size(crds, 2)
-    area, centroid, patch_rg2, exposed = SASA.sasa(sc.mol; n_exp, probe)
+    area, exposed = SASA.sasa(sc.mol; probe)
+    shell, shell_area, shell_cls = SASA.shell_points(sc.mol; probe, n_target)
 
     exp_idx = findall(exposed)
     bur_idx = findall(!, exposed)
@@ -193,8 +208,10 @@ function sasa_hydro_figure(; n_exp::Int = 4096, n_pts::Int = 400, probe::Float64
     ax = Axis3(
         fig[1, 1];
         title = @sprintf(
-            "%s: hydration-shell dummy placement\n%d exposed (dummy sites), %d buried  (probe = %.2f A)",
-            sc.title, length(exp_idx), length(bur_idx), probe),
+            "%s: hydration-shell dummy cloud\n%d dummies (%d convex, %d concave, %d cavity) over %d exposed atoms, %d buried",
+            sc.title, size(shell, 2),
+            count(==(SASA.CONVEX), shell_cls), count(==(SASA.CONCAVE), shell_cls),
+            count(==(SASA.CAVITY), shell_cls), length(exp_idx), length(bur_idx)),
         titlesize = 15, aspect = :data, azimuth = 1.1π,
         xlabel = "x", ylabel = "y", zlabel = "z")
 
@@ -209,30 +226,34 @@ function sasa_hydro_figure(; n_exp::Int = 4096, n_pts::Int = 400, probe::Float64
               transparency = true, shading = NoShading)
     end
 
+    # the shell itself: one marker per accessible point, i.e. one per dummy
+    # `Scattering.hydration` will place. Every point of a given atom carries the
+    # same area, so a uniform marker size is the honest rendering.
+    bead_colour = Dict(SASA.CONVEX => DUMMY_COLOR, SASA.CONCAVE => CONCAVE_COLOR,
+                       SASA.CAVITY => CAVITY_COLOR)
+    scatter!(ax, [Point3f(shell[1, k], shell[2, k], shell[3, k]) for k in axes(shell, 2)];
+             color = [bead_colour[c] for c in shell_cls], markersize = 5)
+
     # raw sample points, only on the two highlighted atoms
     for i in highlight
-        st = atom_sample_points(sc.mol, i, n_pts, probe)
+        st = atom_sample_points(sc.mol, i, n_show, probe)
         ex = [Point3f(p...) for (p, e) in zip(st.pts, st.exposed) if e]
         oc = [Point3f(p...) for (p, e) in zip(st.pts, st.exposed) if !e]
         isempty(oc) || scatter!(ax, oc; color = OCCLUDED_COLOR, markersize = 5)
         isempty(ex) || scatter!(ax, ex; color = EXPOSED_COLOR, markersize = 5)
     end
 
-    # hydration-shell dummies: one per exposed atom, sized by its SASA area
-    # so a bigger patch reads as a bigger dummy instead of every marker
-    # looking identical.
-    amax = maximum(area[exp_idx])
-    dummy_pts = [Point3f(centroid[1, i], centroid[2, i], centroid[3, i]) for i in exp_idx]
-    dummy_sizes = [6.0 + 14.0 * sqrt(area[i] / amax) for i in exp_idx]
-    scatter!(ax, dummy_pts; color = DUMMY_COLOR, markersize = dummy_sizes,
-             marker = :circle, strokewidth = 0.5, strokecolor = (:black, 0.3))
-
     els = [ MarkerElement(color = ATOM_COLOR, marker = :circle, markersize = 14),
-            MarkerElement(color = DUMMY_COLOR, marker = :circle, markersize = 14),
+            MarkerElement(color = DUMMY_COLOR, marker = :circle, markersize = 10),
+            MarkerElement(color = CONCAVE_COLOR, marker = :circle, markersize = 10),
+            MarkerElement(color = CAVITY_COLOR, marker = :circle, markersize = 10),
             MarkerElement(color = EXPOSED_COLOR, marker = :circle, markersize = 10),
             MarkerElement(color = OCCLUDED_COLOR, marker = :circle, markersize = 10)]
     Legend(fig[2, 1], els,
-           [   "atom (expanded radius)", "hydration-shell dummy (size ~ patch area)",
+           [   "atom (expanded radius)",
+               @sprintf("bead: convex (%.3f A^2 each)",
+                        isempty(shell_area) ? 0.0 : first(shell_area)),
+               "bead: concave", "bead: cavity",
                "sample point: exposed (highlighted atoms only)",
                "sample point: occluded (highlighted atoms only)"];
            orientation = :horizontal, framevisible = false, nbanks = 2, labelsize = 12)
@@ -240,18 +261,18 @@ function sasa_hydro_figure(; n_exp::Int = 4096, n_pts::Int = 400, probe::Float64
 end
 
 """
-    vis_sasa_hydro(; n_exp = 4096, n_pts = 400, probe = 1.4) -> Nothing
+    vis_sasa_hydro(; n_target = SASA.SHELL_POINTS, n_show = 400, probe = 1.4) -> Nothing
 
-Display [`sasa_hydro_figure`](@ref): every exposed atom's hydration-shell
-dummy on a real ~80-atom packed cluster, plus the raw sample points on one
-buried and one exposed atom to show the underlying mechanism. Blocks until
-the window is closed.
+Display [`sasa_hydro_figure`](@ref): the whole hydration-shell dummy cloud on a
+real ~80-atom packed cluster, plus the raw sample points on one buried and one
+exposed atom to show the underlying mechanism. Blocks until the window is
+closed.
 
 # Keywords
-- `n_exp`: sample points per atom for the `SASA.sasa` computation itself
-  (all atoms).
-- `n_pts`: sample points drawn for the two highlighted atoms only.
+- `n_target`: global dummy budget; `nothing` derives it from accessible area.
+  CRYSOL's `--fb` analogue, and what `Scattering.hydration` pays for.
+- `n_show`: sample points drawn for the two highlighted atoms only.
 - `probe`: solvent probe radius.
 """
-vis_sasa_hydro(; n_exp::Int = 4096, n_pts::Int = 400, probe::Float64 = 1.4) =
-    wait(display(sasa_hydro_figure(; n_exp, n_pts, probe)))
+vis_sasa_hydro(; n_target::Union{Nothing,Int} = nothing, n_show::Int = 400, probe::Float64 = 1.4) =
+    wait(display(sasa_hydro_figure(; n_target, n_show, probe)))

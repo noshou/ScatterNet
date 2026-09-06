@@ -1,6 +1,18 @@
 # PythonCall/CondaPkg auto-provisions an isolated Python for the xraydb bridge.
-# No system Python, no manual venv, no pyml/libpython juggling. The env builds
-# on the first `pyimport`; force it with `using CondaPkg; CondaPkg.resolve()`.
+# No system Python, no manual venv, no pyml/libpython juggling.
+#
+# AIRLOCK: `using ScatterNet` never provisions this env -- PythonCall is a
+# weak dependency, so the form-factor code path and the Python stack behind it
+# stay dormant until PythonCall is explicitly loaded. (Loading PythonCall
+# itself does resolve this env, via PythonCall's own __init__; that is why the
+# test setup keeps PythonCall out of `test/Project.toml` entirely.) Force the
+# env early with `using CondaPkg; CondaPkg.resolve()`.
+#
+# The test suite never triggers provisioning on a default `Pkg.test()`: the
+# xraydb form-factor tests are opt-in, gated on a truthy SCATTERNET_TEST_XRAYDB
+# environment variable, and only that path pulls PythonCall in (from the
+# separate `test/xraydb/` project) and lets this env build.
+#
 # aarch64: conda-forge and pip both have arm64 builds for these.
 channels = ["conda-forge"]
 

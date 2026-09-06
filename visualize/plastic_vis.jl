@@ -2,7 +2,7 @@
 # core depends only on Roots; GLMakie lives in visualize/Project.toml.
 #
 # Run with:
-#   julia --project=visualize -e 'include("test/tools/plastic_vis.jl"); vis_plastic_points(2000)'
+#   julia --project=visualize -e 'include("visualize/plastic_vis.jl"); vis_plastic_points(2000)'
 
 using ScatterNet.Molecule.SASA: PlasticMap
 using .PlasticMap: plastic_points

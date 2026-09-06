@@ -562,6 +562,28 @@ end
 "Distinct colours for an arbitrary number of series; needs GLMakie loaded."
 _series_colors(n) = [get(GLMakie.Makie.ColorSchemes.viridis, i / max(n, 1)) for i in 1:n]
 
+# --- world-age boundary --------------------------------------------------------
+# `_ensure_plotting` adds the `GLMakie` binding at *run* time, so any method
+# already on the stack (compiled in an older world) can't see it -- calling a
+# drawing function directly then dies with "GLMakie not defined ... binding may
+# be too new". The public figure entry points below therefore load GLMakie and
+# then re-enter the real `_*` implementation through `invokelatest`, which
+# resolves against the current world; everything they call transitively is then
+# fine without further wrapping.
+
+"See [`_bench_figure`](@ref). Loads GLMakie, then draws in the current world."
+bench_figure(; kwargs...) = (_ensure_plotting(); Base.invokelatest(_bench_figure; kwargs...))
+
+"See [`_speed_figure`](@ref). Loads GLMakie, then draws in the current world."
+speed_figure() = (_ensure_plotting(); Base.invokelatest(_speed_figure))
+
+"See [`_vis_bench`](@ref). Loads GLMakie, then draws in the current world."
+vis_bench(; kwargs...) = (_ensure_plotting(); Base.invokelatest(_vis_bench; kwargs...))
+
+"See [`_save_bench_figures`](@ref). Loads GLMakie, then draws in the current world."
+save_bench_figures(prefix::AbstractString = "bench"; kwargs...) =
+    (_ensure_plotting(); Base.invokelatest(_save_bench_figures, prefix; kwargs...))
+
 """
     bench_figure(; n_exp, n_occ, probe) -> Figure
 
@@ -575,9 +597,11 @@ Six-panel summary of the accuracy sweep:
 6. error against the analytic two-sphere cap, versus overlap
 
 Every number here is produced by `test/sasa_bench.jl`; this only draws it.
+
+Call [`bench_figure`](@ref) rather than this directly -- it loads GLMakie and
+crosses the world-age boundary first.
 """
-function bench_figure(; n_exp = BENCH_NEXP, n_occ = 512, probe = BENCH_PROBE)
-    _ensure_plotting()
+function _bench_figure(; n_exp = BENCH_NEXP, n_occ = 512, probe = BENCH_PROBE)
     _, rows = accuracy_sweep(; n_exp, n_occ, probe)
     classes = unique(_col(rows, 2))
     cols = _series_colors(length(classes))
@@ -627,7 +651,7 @@ function bench_figure(; n_exp = BENCH_NEXP, n_occ = 512, probe = BENCH_PROBE)
     n = length(classes)
     barplot!(ax3, repeat(1:n, 3), vcat(exact_e, exact_b, samp);
              stack = repeat(1:3, inner = n),
-             color = repeat(RGBf.([_EXPOSED_RGB, _OCC_RGB, _SAMPLED_RGB]), inner = n))
+             color = repeat([RGBf(c...) for c in (_EXPOSED_RGB, _OCC_RGB, _SAMPLED_RGB)], inner = n))
     Legend(fig[2, 3], [PolyElement(color = RGBf(c...)) for c in
                        (_EXPOSED_RGB, _OCC_RGB, _SAMPLED_RGB)],
            ["exact: exposed", "exact: buried", "sampled"];
@@ -684,9 +708,11 @@ end
 
 Wall time against atom count and `n_exp`, plus the per-atom cost, showing
 where `area_tol` actually buys anything.
+
+Call [`speed_figure`](@ref) rather than this directly -- it loads GLMakie and
+crosses the world-age boundary first.
 """
-function speed_figure()
-    _ensure_plotting()
+function _speed_figure()
     _, srows = speed_sweep()
     fig = Figure(size = (1150, 430))
     Label(fig[0, 1:2], "SASA cost"; fontsize = 20, font = :bold)
@@ -719,11 +745,13 @@ end
     vis_bench(; kwargs...) -> Nothing
 
 Build both figures and display them, blocking until the windows are closed.
+
+Call [`vis_bench`](@ref) rather than this directly -- it loads GLMakie and
+crosses the world-age boundary first.
 """
-function vis_bench(; kwargs...)
-    _ensure_plotting()
-    f1 = bench_figure(; kwargs...)
-    f2 = speed_figure()
+function _vis_bench(; kwargs...)
+    f1 = _bench_figure(; kwargs...)
+    f2 = _speed_figure()
     display(f2)
     wait(display(f1))
     return nothing
@@ -734,11 +762,13 @@ end
 
 Render both figures to `<prefix>_accuracy.png` and `<prefix>_speed.png`
 without needing a window. Returns the paths written.
+
+Call [`save_bench_figures`](@ref) rather than this directly -- it loads GLMakie
+and crosses the world-age boundary first.
 """
-function save_bench_figures(prefix::AbstractString = "bench"; kwargs...)
-    _ensure_plotting()
+function _save_bench_figures(prefix::AbstractString = "bench"; kwargs...)
     paths = String[]
-    for (suffix, f) in (("accuracy", bench_figure(; kwargs...)), ("speed", speed_figure()))
+    for (suffix, f) in (("accuracy", _bench_figure(; kwargs...)), ("speed", _speed_figure()))
         p = "$(prefix)_$(suffix).png"
         save(p, f); push!(paths, p)
     end

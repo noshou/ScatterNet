@@ -36,7 +36,7 @@ const SASA_SRC = SasaTestRadii(Dict(
 
 sasa_mol(elms, crds) = create("sasa-test", elms, crds; radii_source = SASA_SRC)
 
-"Per-atom area from `sasa`; the other three return values are covered separately below."
+"Per-atom area from `sasa`; the `exposed` mask is covered separately below."
 sasa_atoms(mol; kwargs...) = sasa(mol; kwargs...)[1]
 
 "Total solvent-accessible surface area of `mol`: the sum of its per-atom areas."
@@ -493,34 +493,77 @@ end
         @test tight < total < loose < iso
     end
 
-    @testset "patch geometry: centroid and patch_rg2" begin
-        # A lone atom's accessible patch is the whole sphere: the centroid
-        # collapses to (very nearly) the atom's own position, since the
-        # plastic point set is close to symmetric about its own mean, and
-        # patch_rg2 is (very nearly) ρ² exactly (see `_unit_patch_moments`).
+    @testset "shell_points: the accessible surface as a point cloud" begin
+        # A lone atom is ALL_EXPOSED, so every sampled direction survives and
+        # each stands for an exact 1/n_pts of the analytic sphere.
         probe = 1.4
         r = 1.5
         ρ = r + probe
+        # a lone atom is ALL_EXPOSED; its area is small enough that the derived
+        # budget floors at SHELL_MIN_POINTS, and every bead carries an equal share
         m = sasa_mol(["q"], [(3.0, -2.0, 7.0)])
-        area, centroid, patch_rg2, exposed = sasa(m; n_exp = 4096)
+        pts, pa, cls = SASA.shell_points(m; probe = probe)
 
-        @test exposed == [true]
-        @test area[1] == sasa_full(r, probe)
-        @test isapprox(centroid[:, 1], [0.0, 0.0, 0.0]; atol = 1e-2)   # centred molecule
-        @test isapprox(patch_rg2[1], ρ^2; atol = 1e-4)   # discretisation of the finite point set
+        @test size(pts) == (3, SASA.SHELL_MIN_POINTS)
+        @test length(pa) == SASA.SHELL_MIN_POINTS
+        @test all(a -> a ≈ 4π * ρ^2 / SASA.SHELL_MIN_POINTS, pa)
+        @test sum(pa) ≈ sasa_full(r, probe)
+        @test all(==(SASA.CONVEX), cls)      # a lone sphere is convex everywhere
 
-        # A fully engulfed atom's centroid falls back to its own position and
-        # patch_rg2 is exactly zero: there is no accessible patch to place a
-        # dummy on.
+        # an explicit budget overrides the derived one
+        pe, _, _ = SASA.shell_points(m; probe = probe, n_target = 200)
+        @test size(pe, 2) == 200
+
+        # every point sits on the expanded sphere, in the molecule's own
+        # centred frame -- the same origin `coords_cartesian` uses, which is
+        # what lets Scattering mix this cloud with the atoms' own multipoles.
+        atom = Molecules.coords_cartesian(m)[:, 1]
+        for k in axes(pts, 2)
+            @test isapprox(sqrt(sum(abs2, pts[:, k] .- atom)), ρ; atol = 1e-10)
+        end
+
+        # A fully engulfed atom contributes no points at all: the cloud is the
+        # accessible surface, and it has none.
         mc = sasa_mol(["a", "b"], [(0.0, 0.0, 0.0), (0.0, 0.0, 0.0)])
-        _, cen_c, rg2_c, exp_c = sasa(mc; n_exp = 4096, probe = 1.4)
-        @test exp_c[1] == false
-        @test rg2_c[1] == 0.0
-        @test cen_c[:, 1] == Molecules.coords_cartesian(mc)[:, 1]
+        pc, ac, _ = SASA.shell_points(mc; probe = probe)
+        # both atoms are coincident; the larger engulfs the smaller, so at most
+        # one atom's worth of points can survive
+        @test size(pc, 2) == length(ac)
+        @test size(pc, 2) <= SASA._SHELL_SAMPLE
+
+        # Total cloud area tracks sasa's own area estimate, since each point
+        # carries 1/n_pts of its atom's sphere either way.
+        m2 = sasa_mol(["q", "q"], [(0.0, 0.0, 0.0), (2.0, 0.0, 0.0)])
+        _, pa2, _ = SASA.shell_points(m2; probe = probe)
+        @test isapprox(sum(pa2), sum(sasa_atoms(m2; n_exp = 4096, probe = probe));
+                       rtol = 1e-2)
+
+        # the budget caps the cloud and preserves the area it represents
+        for n in (16, 64, 256)
+            pn, an, _ = SASA.shell_points(m2; probe = probe, n_target = n)
+            @test size(pn, 2) <= n
+            @test isapprox(sum(an), sum(pa2); rtol = 5e-2)
+        end
+
+        @test_throws DomainError SASA.shell_points(m2; n_target = 0)
+        @test_throws DomainError SASA.shell_points(m2; n_target = -3)
+        @test_throws DomainError SASA.shell_points(m2; probe = -1e-9)
+
+        # a sealed void inside a dense shell is CAVITY throughout, while the
+        # same construction with no void has none; detection holds while the
+        # void fits inside the ray range and degrades to open surface past it.
+        sph(R, n) = [(R*sqrt(1-z^2)*cos(t), R*sqrt(1-z^2)*sin(t), R*z)
+                     for (z, t) in ((-1 + 2(k - 0.5)/n, π*(1 + sqrt(5))*k) for k in 1:n)]
+        for R in (4.0, 5.0, 6.0)
+            hp, _, hc = SASA.shell_points(
+                sasa_mol(fill("q", 300), sph(R, 300)); probe = probe)
+            inner = [k for k in axes(hp, 2) if sqrt(sum(abs2, hp[:, k])) < R]
+            @test !isempty(inner)
+            @test all(k -> hc[k] == SASA.CAVITY, inner)
+        end
 
         # Consistency: sasa's own area matches the wrapper built on it.
-        m2 = sasa_mol(["q", "q"], [(0.0, 0.0, 0.0), (2.0, 0.0, 0.0)])
-        area2, _, _, _ = sasa(m2; n_occ = 32, n_exp = 1500, probe = probe)
+        area2, _ = sasa(m2; n_occ = 32, n_exp = 1500, probe = probe)
         @test area2 == sasa_atoms(m2; n_occ = 32, n_exp = 1500, probe = probe)
     end
 

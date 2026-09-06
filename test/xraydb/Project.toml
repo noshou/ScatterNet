@@ -1,0 +1,19 @@
+# Side environment for the OPT-IN xraydb form-factor tests only.
+#
+# Kept out of `test/Project.toml` on purpose: PythonCall's __init__ provisions
+# the CondaPkg (numpy + xraydb) conda env as soon as PythonCall loads, and
+# `Pkg.test` precompiles every package in the test environment. Holding
+# PythonCall + CondaPkg here means a default `Pkg.test()` never loads them and
+# never provisions conda.
+#
+# `test_formfactor.jl` does `push!(LOAD_PATH, joinpath(@__DIR__, "xraydb"))` and
+# then `import PythonCall` when SCATTERNET_TEST_XRAYDB is set to a truthy value.
+# That is the only code path that touches this environment.
+
+[deps]
+CondaPkg = "992eb4ea-22a4-4c89-a5bb-47a3300528ab"
+PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
+
+[compat]
+CondaPkg = "0.2"
+PythonCall = "0.9"

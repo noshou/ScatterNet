@@ -9,7 +9,7 @@ form factors.
 module FormFactorXrayDBExt
 
 using PythonCall: pyimport, pylist, pyconvert, Py
-using ScatterNet.Scattering.FormFactorXrayDB: FormFactorXrayDB, FF, FormFactorError
+using ScatterNet.Interfaces.FormFactorXrayDB: FormFactorXrayDB, FF, FormFactorError
 
 const _PYMOD = Ref{Py}()
 
@@ -23,7 +23,7 @@ fails.
 function _pymod()::Py
     if !isassigned(_PYMOD)
         sys = pyimport("sys")
-        d = pkgdir(FormFactorXrayDB, "py")
+        d = pkgdir(FormFactorXrayDB, "src", "Interfaces", "FormFactorXrayDB", "py")
         d ∉ sys.path && sys.path.insert(0, d)
         try
             _PYMOD[] = pyimport("FormFact_py")
