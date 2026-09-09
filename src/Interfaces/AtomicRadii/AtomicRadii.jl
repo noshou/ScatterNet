@@ -167,7 +167,7 @@ independent of any particular `RadiiSource`; the `Interfaces.lookup` method
 below is a thin wrapper over it for `AtomicRadiiSource` specifically.
 
 # Arguments
-- `ions`: ion/element strings to resolve.
+    - `ions`: ion/element strings to resolve.
 """
 function _resolve_all(ions::AbstractVector{<:AbstractString})
     cache = Dict{String,Union{Float64,Nothing}}()

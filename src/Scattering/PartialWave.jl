@@ -28,18 +28,11 @@ the degree-`l` spherical Bessel factors.
     - `W = f_t' .* j_deg` — elementwise product, `(Q, chunk)`.
     - `W'` — transpose back to `(chunk, Q)`.
     - `Y_l * W'` — matrix product, `(l+1, chunk) * (chunk, Q) → (l+1, Q)`.
-
-Kept as a free function (not a closure/method on a struct) purely for
-symmetry with the code this was ported from. Unlike that version, there is
-no separate "compiled" variant here: Julia specializes each method on
-argument *types*, not array *shapes*, so this already compiles once per
-element-type combination and is reused across every chunk size and every
-degree without a "one graph per degree" blowup.
 """
 function _deg_contrib(
     f_t::AbstractMatrix, j_deg::AbstractMatrix, Y_l::AbstractMatrix
 )::AbstractMatrix{<:Number}
-    W = transpose(f_t) .* j_deg   # (Q, chunk) .* (Q, chunk) -> (Q, chunk)
+    W = transpose(f_t) .* j_deg   # (Q, chunk)  .* (Q, chunk) -> (Q, chunk)
     return Y_l * transpose(W)     # (l+1, chunk) * (chunk, Q) -> (l+1, Q)
 end
 
@@ -48,12 +41,7 @@ end
 
 ±m symmetry weights: `m = 0 -> 1`, `m > 0 -> 2`.
 
-Valid only against a `B_lm` built from a REAL per-atom amplitude, where
-`B_{l,-m} = (-1)^m * conj(B_lm)`. `compute_B_lm` guarantees that by
-splitting a complex `f` into real/imaginary channels, each of which is
-separately real-amplitude; `self_scatter`/`cross_scatter` then sum the
-channels. Folding a complex `f` directly is NOT rotationally invariant
-(measured 3% error with Fe at 8 keV).
+Folding a complex `f` directly is not rotationally invariant (measured 3% error with Fe at 8 keV).
 
 # Arguments
 - `lMax::Integer`: maximum spherical harmonic degree. Must be non-negative.
@@ -110,8 +98,7 @@ Compute `B_lm(q) = Σ_i f_atoms[i](q) * j_l(q*r_i) * conj(Y_lm(θ_i, φ_i))`.
 
 `f_atoms` carries whatever per-atom complex scattering amplitude the
 caller wants (element form factors for the vacuum term, dummy-atom
-excluded-volume/shell amplitudes for the other terms) — this is the
-shared low-level primitive every `S_(a,b)` term downstream is built from.
+excluded-volume/shell amplitudes for the other terms).
 
 # Arguments
     -   `coords_sph::AbstractMatrix{<:Real}`, size `(3, N)`: per-atom spherical
@@ -253,9 +240,6 @@ end
     cross_scatter(B_lm_a, B_lm_b, weights) -> AbstractVector{<:Real}
 
 `S(q) = 4π * Σ_c Σ_lm w_lm * Re(B_a(q) * conj(B_b(q)))`.
-
-Only channels present in both operands contribute; a real amplitude has no imaginary 
-channel (`C = 1`), so its missing channel contributes zero rather than erroring.
 
 # Arguments
 - `B_lm_a::AbstractArray{<:Complex,3}`, size `(C_a, K, Q)`.

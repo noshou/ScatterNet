@@ -1,32 +1,80 @@
-# Exercises the xraydb form-factor backend: src/Interfaces/FormFactorXrayDB/ plus
-# the FormFactorXrayDBExt package extension (the Python-facing half, loaded with
-# PythonCall). It needs the CondaPkg env (numpy + xraydb).
+# Exercises the pure-Julia form-factor backend: src/Interfaces/FormFactor/.
+# f(q,E) = f0(s) + f1(E) + i*f2(E), s = q/(4pi), from the bundled
+# form_factors.sqlite3 (Waasmaier-Kirfel f0, Chantler FFAST anomalous terms).
 
 const IFACE = ScatterNet.Interfaces
-using ScatterNet.Interfaces.FormFactorXrayDB: compute_form_factors, FF, FormFactorError, FormFactorSourceXrayDB
+using ScatterNet.Interfaces.FormFactor: compute_form_factors, FF, FormFactorError,
+                                        FormFactorSourceTables, f0, f1f2, S_MAX
 
 check_c(a, b) = abs(a - b) < 1e3 * DEFAULT_ATOL
 qvals = [0.1, 0.2]
 qgrid = [0.0, 0.1, 0.5, 1.0]
 
-@testset "FormFactorXrayDB" begin
+@testset "FormFactor" begin
 
-    # The marker type is pure Julia and testable with or without the Python env.
     @testset "backend marker" begin
-        @test FormFactorSourceXrayDB() isa IFACE.FormFactorSource
+        @test FormFactorSourceTables() isa IFACE.FormFactorSource
         @test sprint(showerror, FormFactorError("boom")) == "FormFactorError: boom"
         @test FormFactorError("boom") isa Exception
     end
 
-    @testset "the xraydb extension is actually loaded" begin
-        # Guards against this whole file going vacuous: without PythonCall,
-        # `compute_form_factors` still resolves. Pinning the method's parent 
-        # module proves the assertions below are hitting the real xraydb backend.
-        @test Base.get_extension(ScatterNet, :FormFactorXrayDBExt) !== nothing
-        m = only(methods(compute_form_factors, (Vector{String}, Float64, Vector{Float64})))
-        @test parentmodule(m) === Base.get_extension(ScatterNet, :FormFactorXrayDBExt)
-        # the backend really answers
-        @test compute_form_factors(["fe3+"], 8000.0, [0.1, 0.2]) isa FF
+    # -----------------------------------------------------------------------
+    # Anti-vacuity guard. This is what stops the rest of the file being a set of
+    # assertions about nothing: every value below is checked against a reference
+    # dumped from the predecessor xraydb/PythonCall implementation, at full
+    # precision, over species and energies this file otherwise never touches.
+    # Provenance and tolerances: test/fixtures/README.md.
+    #
+    # It replaces a check that the xraydb package extension was loaded and owned
+    # the answering method. That guarded provenance -- *who* answered. With the
+    # backend now in-package there is no stub to fall through to, so the useful
+    # guard is *what* it answers, pinned to the implementation being replaced.
+    # -----------------------------------------------------------------------
+
+    "Rows of a fixture CSV, minus its header."
+    _fx(name) = Iterators.drop(eachline(joinpath(@__DIR__, "fixtures", name)), 1)
+
+    "Agreement to within `k` units in the last place at `ref`'s own magnitude."
+    _ulp(got, ref, k = 2) = abs(got - ref) <= k * eps(abs(ref))
+
+    @testset "f0 matches the reference to <= 1 ulp over 348 species/s points" begin
+        # Exact for all but one point (u6+ at s = 1.989, 1 ulp). The residual is
+        # summation order inside `c + Σ a_i exp(...)`, not a different formula --
+        # the NumPy exponent association is already reproduced. Chasing the last
+        # ulp would pin us to a NumPy implementation detail for no physical gain:
+        # independent form-factor tabulations disagree at the 0.4% level.
+        n = 0; exact = 0; worst = 0.0
+        for ln in _fx("fx_f0.csv")
+            ion, s_, ref = split(ln, ',')
+            got = f0(String(ion), parse(Float64, s_)); r = parse(Float64, ref)
+            n += 1; got === r && (exact += 1)
+            @test _ulp(got, r)
+            worst = max(worst, abs(got - r) / abs(r))
+        end
+        @test n == 348                      # the fixture is actually being read
+        @test exact >= 347                  # essentially all of it is bit-for-bit
+        @test worst < 1e-15
+    end
+
+    @testset "f1/f2 match the reference, incl. 500 points across the Fe K edge" begin
+        # f2 is exact on ~99% of points; the rest differ by 1 ulp because NumPy's
+        # and Julia's `log`/`exp` differ by that much on some arguments. That is a
+        # libm difference, not an algorithmic one, and it is not matchable.
+        # f1 additionally carries a 7x7 dense solve for the spline coefficients,
+        # hence the looser (but still ~5 orders inside the suite's 1e-6) bound.
+        n = 0; exact2 = 0; w1 = 0.0; w2 = 0.0
+        for ln in _fx("fx_f1f2.csv")
+            el, E, r1, r2 = split(ln, ',')
+            g1, g2 = f1f2(String(el), parse(Float64, E))
+            a = parse(Float64, r1); b = parse(Float64, r2)
+            n += 1; g2 === b && (exact2 += 1)
+            @test _ulp(g2, b)
+            w1 = max(w1, abs(g1 - a)); w2 = max(w2, abs(g2 - b) / abs(b))
+        end
+        @test n == 852
+        @test w1 < 1e-11                    # measured ~6e-14
+        @test exact2 / n > 0.98
+        @test w2 < 1e-15
     end
 
     @testset "known fe3+ values at 8000 eV" begin
@@ -157,6 +205,34 @@ qgrid = [0.0, 0.1, 0.5, 1.0]
         @test_throws FormFactorError compute_form_factors(["fe3+"], -1.0, qvals)
         @test_throws FormFactorError compute_form_factors(["fe3+"], 8000.0, [-0.1])
         @test_throws FormFactorError compute_form_factors(["fe3+"], 8000.0, [0.1, -0.1])
+    end
+
+    @testset "f0 is guarded against out-of-range s rather than extrapolating" begin
+        # The ionic fits carry large negative constant terms (fe3+: c = -61.93)
+        # and go negative well past their fit range, so this is a hard error.
+        @test f0("fe3+", S_MAX) isa Float64
+        @test_throws FormFactorError f0("fe3+", S_MAX + 1e-9)
+        @test_throws FormFactorError f0("fe3+", -1e-9)
+        @test_throws FormFactorError f0("not_an_ion", 0.1)
+    end
+
+    @testset "an unknown charge state falls back to the neutral atom, and says so" begin
+        # The predecessor made this substitution silently; fe4+ scattering as
+        # 26 electrons instead of 22 is a real approximation, so it is logged.
+        t = IFACE.form_factor_table(8000.0, ["fe4+"], qvals)
+        @test any(==("NEUTRAL fe4+"), IFACE.form_factor_log(t))
+        @test check_c(real(t.tbl["fe4+"][1]) - real(IFACE.form_factor_table(8000.0, ["fe"], qvals).tbl["fe"][1]), 0.0)
+    end
+
+    @testset "f1f2 rejects an element with no Chantler data or an out-of-range energy" begin
+        # Chantler covers Z = 1..92; Waasmaier-Kirfel reaches Z = 98, so the
+        # actinides past U are f0-only rather than an error at the table level.
+        @test_throws FormFactorError f1f2("pu", 8000.0)
+        @test_throws FormFactorError f1f2("fe", 0.5)          # below 1.01 eV
+        @test_throws FormFactorError f1f2("fe", 1.0e9)
+        t = IFACE.form_factor_table(8000.0, ["pu"], qvals)
+        @test any(==("F0-ONLY pu"), IFACE.form_factor_log(t))
+        @test all(v -> imag(v) == 0.0, t.tbl["pu"])
     end
 
     @testset "integer-typed energy and q are accepted" begin

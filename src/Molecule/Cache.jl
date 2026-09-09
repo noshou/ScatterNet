@@ -16,8 +16,8 @@ end
 Build an unforced cache of the `T`-valued thunk `f`.
 
 # Arguments
-- `::Type{T}`: element type the thunk returns.
-- `f`: zero-arg thunk, run once on the first [`force`](@ref).
+    - `::Type{T}`: element type the thunk returns.
+    - `f`: zero-arg thunk, run once on the first [`force`](@ref).
 """
 make(::Type{T}, f) where {T} = Lazy{T}(f)
 
@@ -27,7 +27,7 @@ make(::Type{T}, f) where {T} = Lazy{T}(f)
 Run `c`'s thunk once, under its lock, then return the stored value on every call.
 
 # Arguments
-- `c`: the cache to force.
+    - `c`: the cache to force.
 """
 function force(c::Lazy{T})::T where {T}
     @lock c.lock begin

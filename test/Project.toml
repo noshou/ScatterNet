@@ -1,24 +1,22 @@
 [deps]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
-CondaPkg = "992eb4ea-22a4-4c89-a5bb-47a3300528ab"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
-PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 ScatterNet = "f10a6c88-74b5-485f-9c8c-589f8f9e3c2a"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
-# PYTHON, BY DESIGN
-# ------------------------------------------------------------------------------
-# PythonCall + CondaPkg ARE dependencies of the test environment. Loading
-# PythonCall provisions the CondaPkg (numpy + xraydb) env, and `Pkg.test`
-# precompiles the whole test environment, so a bare `Pkg.test()` builds that env
-# and runs the xraydb form-factor tests. That is intended: the suite exercises
-# the backend and the `FormFactorXrayDBExt` extension on every run, with no
-# opt-in flag and no conditionally-skipped testsets.
+# No Python. Form factors are computed in Julia from bundled tables
+# (src/Interfaces/FormFactor/), so the whole suite runs with no CondaPkg env,
+# no PythonCall, and no opt-in flag.
+#
+# ForwardDiff is test-only: it pins the requirement that the fit-parameter path
+# (contrast -> vᵀGv -> m·I+c) stays free of Float64 casts, so stage-1 HMC can
+# differentiate the forward model. Not a runtime dependency of ScatterNet.
 
 [compat]
 Aqua = "0.8"
-CondaPkg = "0.2"
+ForwardDiff = "0.10, 1"
 JET = "0.9, 0.10, 0.11, 0.12"
-PythonCall = "0.9"

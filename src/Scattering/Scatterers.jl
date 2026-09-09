@@ -1,16 +1,16 @@
 # Per-species partial-wave terms: one function per scatterer species in
-# `A_total(q) = A_vac(q) - dns*A_ex(q) + dro*A_sh(q)` (see the `Scattering`
-# docstring, section 5/6). Each builds that species' `(N, Q)` amplitude, hands
-# it to the shared `compute_B_lm`, and returns just that species' multipoles.
-using ..Interfaces: Interfaces, FormFactorSource, FormFactorSourceXrayDB
+# `A_total(q) = A_vac(q) - dns*A_ex(q) + Σ_k dro_k*A_sh_k(q)` (see the
+# `Scattering` docstring). Each builds that species' `(N, Q)` amplitude, hands it
+# to the shared `compute_B_lm`, and returns just that species' multipoles. The
+# `S_ab` reduction -- diagonals and cross terms alike -- is assembled downstream
+# from the per-species `B_lm`, so nothing here calls `self_scatter`.
+using ..Interfaces: Interfaces, FormFactorSource
 using ..Molecule.SASA: SASA
 using ..Molecule.Molecules: Molecules, Molecule
 
-"""
-Hydration-shell thickness in Å: how far the perturbed-density water layer
-extends beyond the solvent-accessible surface. (CRYSOL default).
-"""
-const SHELL_THICKNESS = 3.0
+# `SHELL_THICKNESS`, `PROBE_RADIUS`, `SHELL_N_TARGET`, `SHELL_CLASSES` and
+# `FORM_FACTOR_SOURCE` are defined at the `Scattering` module level (see
+# `Scattering.jl`); this file only reads them as call defaults.
 
 """
     _gaussian_dummy(vols, qvals) -> Matrix{Float64}
@@ -45,8 +45,9 @@ Vacuum term: the real atoms of `mol` with no solvent at all.
 
 `B_vac`, the `(C, K, Q)` multipoles feeding `S_vac,·` downstream. The amplitude
 is the true X-ray form factor per atom, pulled through the `Interfaces` facade
-at photon energy `energy`; near an absorption edge it is complex (`f0 + f' + i*f''`),
-so `compute_B_lm` returns two channels here where the dummy species return one.
+at photon energy `energy`; near an absorption edge it is complex
+(`f0 + f' + i*f''`), so `compute_B_lm` returns two channels here where the dummy
+species return one.
 
 # Arguments
 -   `mol`: the molecule; only its spherical coordinates are used.
@@ -57,10 +58,10 @@ so `compute_B_lm` returns two channels here where the dummy species return one.
 -   `_CHUNK::UInt64`: atoms processed per pass inside [`compute_B_lm`](@ref).
 
 # Keywords
--   `form_factor_source::FormFactorSource = FormFactorSourceXrayDB()`: the
+-   `form_factor_source::FormFactorSource = FORM_FACTOR_SOURCE`: the
     form-factor backend, mirroring `Molecule.create`'s `radii_source`. The
-    default needs the live xraydb extension; a stub subtype lets this be
-    exercised without one.
+    default reads the bundled tables; a stub subtype lets this be exercised
+    without them.
 
 # Returns
 -   `B_lm::AbstractArray{<:Complex,3}`, `(C, K, Q)` in [`compute_B_lm`](@ref).
@@ -72,7 +73,7 @@ function vacuo(
     ions::Vector{String},
     energy::Float64,
     _CHUNK::UInt64;
-    form_factor_source::FormFactorSource = FormFactorSourceXrayDB()
+    form_factor_source::FormFactorSource = FORM_FACTOR_SOURCE,
 )::AbstractArray{<:Complex,3}
     crd = Molecules.coords_spherical(mol)
     tbl = Interfaces.form_factor_table(form_factor_source, energy, ions, qvals)
@@ -85,7 +86,7 @@ end
 
 Excluded-volume term: one Gaussian dummy per atom, at the atom's own position.
 `B_ex`, feeding `S_ex,·` downstream. Bulk solvent cannot occupy the space an
-atom already fills, so the volume each atom displaces has to be subtracted from 
+atom already fills, so the volume each atom displaces has to be subtracted from
 the amplitude before squaring. Every atom displaces solvent whether or not it is
 on the surface, so this runs over the full molecule, unlike [`hydration`](@ref).
 
@@ -96,14 +97,14 @@ on the surface, so this runs over the full molecule, unlike [`hydration`](@ref).
 - `_CHUNK::UInt64`: atoms processed per pass inside [`compute_B_lm`](@ref).
 
 # Returns
--   `B_lm`: as [`vacuo`](@ref), but with `C = 1` a dummy sphere's
-    amplitude is real, so there is no `f''` channel.
+-   `B_lm`: as [`vacuo`](@ref), but with `C = 1` -- a dummy sphere's amplitude is
+    real, so there is no `f''` channel.
 """
 function excluded(
     mol::Molecule,
     qvals::AbstractVector{<:Real},
     lMax::Integer,
-    _CHUNK::UInt64
+    _CHUNK::UInt64,
 )::AbstractArray{<:Complex,3}
     crd = Molecules.coords_spherical(mol)
     amp = _gaussian_dummy(Molecules.vols(mol), qvals)
@@ -111,15 +112,19 @@ function excluded(
 end
 
 """
-    hydration(mol, qvals, lMax, _CHUNK; thickness, probe, n_target, classes) ->
-    AbstractArray{<:Complex,3}
+    hydration(mol, qvals, lMax, _CHUNK; thickness, probe, n_target, classes)
+        -> @NamedTuple{convex::Array{ComplexF64,3}, concave::Array{ComplexF64,3}, cavity::Array{ComplexF64,3}}
 
-Hydration-shell term: a Gaussian dummy on every accessible surface point.
+Hydration-shell term, split into CRYSOL 3's three border-layer populations.
 
-Dummies come from [`SASA.shell_points`](@ref), each carrying the
-`area * thickness` slab of shell it stands for, so the cloud tiles the layer
-rather than generalizing an envlope around it.
-
+[`SASA.shell_points`](@ref) is run once; its beads are partitioned by
+[`SASA.BeadClass`](@ref) and each class gets its own `B_lm` via
+[`compute_B_lm`](@ref), every bead carrying the `area * thickness` slab of shell
+it stands for, so the cloud tiles the layer rather than approximating it with an
+envelope. The three arrays are the `sh_convex` / `sh_concave` / `sh_cavity`
+species of the five-species expansion
+    `A_total = A_vac - dns·A_ex + Σ_k dro_k·A_sh_k`; each takes its own fitted
+contrast `dro_k` downstream (CRYSOL's `ρ = (1, 1, 0)` defaults).
 
 # Arguments
 - `mol`: the molecule; its accessible surface is used, not its atom positions.
@@ -128,16 +133,21 @@ rather than generalizing an envlope around it.
 - `_CHUNK::UInt64`: dummies processed per pass inside [`compute_B_lm`](@ref).
 
 # Keywords
-- `thickness::Float64 = SHELL_THICKNESS`: shell thickness in Å; `> 0`.
-- `probe::Float64 = 1.4`: solvent probe radius, forwarded to `shell_points`.
-- `n_target::Union{Nothing,Int} = nothing`: total shell dummies, the analogue of
-CRYSOL's `--fb`. `nothing` lets `SASA.shell_points` size the cloud from the
-accessible area (`≈ area / SASA.SHELL_AREA_PER_POINT`, floored at
-`SASA.SHELL_MIN_POINTS`); pass an `Int` to pin it. Runtime is linear in it.
+    - `thickness::Float64 = SHELL_THICKNESS`: shell thickness in Å; `> 0`.
+    - `probe::Float64 = PROBE_RADIUS`: solvent probe radius, forwarded to `shell_points`.
+    - `n_target::Union{Nothing,Int} = SHELL_N_TARGET`: total shell dummies before the class
+    split, the analogue of CRYSOL's `--fb`. `nothing` lets `SASA.shell_points`
+    size the cloud from the accessible area (`≈ area / SASA.SHELL_AREA_PER_POINT`,
+    floored at `SASA.SHELL_MIN_POINTS`); pass an `Int` to pin it. Runtime is
+    linear in it.
+    - `classes = SHELL_CLASSES`: which populations to actually build. A class left
+    out still appears in the result as an all-zero `B_lm` (equivalent to
+    `dro_k = 0`); omitting it only skips its `compute_B_lm` pass. Must be
+    non-empty.
 
 # Returns
--   `B_lm`: as [`excluded`](@ref) (`C = 1`). A molecule with no accessible
-    surface yields an all-zero `B_lm`, rather than an error.
+-   `@NamedTuple{convex, concave, cavity}` of `(C, K, Q)` `Array{ComplexF64,3}`,
+    `C = 1` (dummy amplitudes are real).
 """
 function hydration(
     mol::Molecule,
@@ -145,16 +155,23 @@ function hydration(
     lMax::Integer,
     _CHUNK::UInt64;
     thickness::Float64           = SHELL_THICKNESS,
-    probe::Float64               = 1.4,
-    n_target::Union{Nothing,Int} = nothing,
-    classes                      = (SASA.CONVEX, SASA.CONCAVE)
-)::AbstractArray{<:Complex,3}
+    probe::Float64               = PROBE_RADIUS,
+    n_target::Union{Nothing,Int} = SHELL_N_TARGET,
+    classes                      = SHELL_CLASSES,
+)::@NamedTuple{convex::Array{ComplexF64,3}, concave::Array{ComplexF64,3}, cavity::Array{ComplexF64,3}}
     thickness > 0.0 || throw(ArgumentError("hydration: thickness must be > 0"))
     isempty(classes) && throw(ArgumentError("hydration: classes must be non-empty"))
 
     pts, area, class = SASA.shell_points(mol; probe = probe, n_target = n_target)
-    keep = findall(c -> c in classes, class)
-    crd = Molecules.to_spherical(pts[:, keep])
-    amp = _gaussian_dummy(area[keep] .* thickness, qvals)
-    return compute_B_lm(crd, qvals, amp, lMax, _CHUNK)
+
+    _shell(want) = begin
+        sel = want in classes ? findall(==(want), class) : Int[]
+        crd = Molecules.to_spherical(pts[:, sel])
+        amp = _gaussian_dummy(area[sel] .* thickness, qvals)
+        compute_B_lm(crd, qvals, amp, lMax, _CHUNK)
+    end
+
+    return (convex  = _shell(SASA.CONVEX),
+            concave = _shell(SASA.CONCAVE),
+            cavity  = _shell(SASA.CAVITY))
 end

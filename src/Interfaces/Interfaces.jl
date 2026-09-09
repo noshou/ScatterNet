@@ -1,14 +1,15 @@
 """
-Swappable-backend facade. Declares the backend markers (`RadiiSource`,
-`FormFactorSource`) and the generic functions their implementations extend,
-then encapsulates the two bundled backends as child submodules:
+Swappable-backend interfaces. Declares the backend markers (`RadiiSource`,
+`FormFactorSource`) and their generic functions then encapsulates the two 
+bundled backends as child submodules:
 
--   `AtomicRadii` — atomic/ionic radii from a bundled SQLite file
-    (`AtomicRadiiSource <: RadiiSource`, extends [`lookup`](@ref)).
--   `FormFactorXrayDB` — X-ray form factors via the Python `xraydb` bridge
-    (`FormFactorSourceXrayDB <: FormFactorSource`, extends
-    [`form_factor_table`](@ref) / [`form_factors`](@ref) /
-    [`form_factor_log`](@ref)).
+    -   `AtomicRadii` — atomic/ionic radii from a bundled SQLite file
+        (`AtomicRadiiSource <: RadiiSource`, extends [`lookup`](@ref)).
+
+    -   `FormFactor` — X-ray form factors from Waasmaier-Kirfel and Chantler tables
+        (`FormFactorSourceTables <: FormFactorSource`, extends
+        [`form_factor_table`](@ref) / [`form_factors`](@ref) /
+        [`form_factor_log`](@ref)).
 
 Non-test code elsewhere in the package reaches both backends ONLY through
 this module (`Interfaces.<name>`); the submodule internals are not
@@ -16,7 +17,7 @@ re-exported.
 """
 module Interfaces
 
-export  RadiiSource, FormFactorSource, AtomicRadiiSource, FormFactorSourceXrayDB,
+export  RadiiSource, FormFactorSource, AtomicRadiiSource, FormFactorSourceTables,
         FormFactorError, lookup, form_factor_table, form_factors, form_factor_log
 
 "A source of atomic/ionic radii. Implement [`lookup`](@ref) for a concrete subtype."
@@ -34,21 +35,13 @@ entry per input, in input order.
 """
 function lookup end
 
-"A form-factor backend. See `FormFactorXrayDB` for the reference implementation."
+"A form-factor backend. See `FormFactor` for the reference implementation."
 abstract type FormFactorSource end
 
 """
     form_factor_table([src::FormFactorSource,] energy::Real, ions, qvals) -> FF
 
-Build a form-factor container for `ions` at one photon `energy` over the
-`qvals` grid — one row per unique ion, aligned to the container's q index.
-The concrete container type (`FormFactorXrayDB.FF`) and the work of populating
-it belong to the backend; this is the generic entry point every consumer
-calls.
-
-`src` selects the backend, mirroring `Molecule.create`'s `radii_source`; it
-lets a caller (or a test) swap in a stub without a live xraydb environment.
-Omitting it defaults to `FormFactorSourceXrayDB()`.
+Build a form-factor container for `ions` at one `energy` over the `qvals` grid.
 
 # Arguments
 - `src`: the form-factor backend to query (optional).
@@ -71,9 +64,9 @@ The queried `qvals` must be grid points of `t`, and every `ions[i]` must be
 present in `t`; either violation throws [`FormFactorError`](@ref).
 
 # Arguments
-- `t`: form-factor container from [`form_factor_table`](@ref).
-- `ions`: ion strings to fetch, one per output row.
-- `qvals`: vector of q values; each must match a grid point of `t` exactly.
+    - `t`: form-factor container from [`form_factor_table`](@ref).
+    - `ions`: ion strings to fetch, one per output row.
+    - `qvals`: vector of q values; each must match a grid point of `t` exactly.
 """
 function form_factors end
 
@@ -90,9 +83,9 @@ in full, in the order they were encountered.
 function form_factor_log end
 
 include("AtomicRadii/AtomicRadii.jl")
-include("FormFactorXrayDB/FormFactorXrayDB.jl")
+include("FormFactor/FormFactor.jl")
 
 using .AtomicRadii: AtomicRadii, AtomicRadiiSource
-using .FormFactorXrayDB: FormFactorXrayDB, FormFactorSourceXrayDB, FormFactorError
+using .FormFactor: FormFactor, FormFactorSourceTables, FormFactorError
 
 end # module

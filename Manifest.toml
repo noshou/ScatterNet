@@ -2,7 +2,7 @@
 
 julia_version = "1.12.7"
 manifest_format = "2.0"
-project_hash = "40242c58fdfff1f23715f86424452a2afd855e4f"
+project_hash = "38a51c696c344b50f9aca0285820a0f1cc6c8842"
 
 [[deps.AbstractTrees]]
 git-tree-sha1 = "2d9c9a55f9c93e8887ad391fbae72f8ef55e1177"
@@ -304,17 +304,10 @@ uuid = "76ed43ae-9a5d-5a62-8c75-30186b810ce8"
 version = "3.53.2+0"
 
 [[deps.ScatterNet]]
-deps = ["Bessels", "DBInterface", "LegendrePolynomials", "NearestNeighbors", "Roots", "SQLite", "SphericalHarmonics"]
+deps = ["Bessels", "DBInterface", "LegendrePolynomials", "LinearAlgebra", "NearestNeighbors", "Roots", "SQLite", "SphericalHarmonics"]
 path = "."
 uuid = "f10a6c88-74b5-485f-9c8c-589f8f9e3c2a"
 version = "0.1.0"
-
-    [deps.ScatterNet.extensions]
-    FormFactorXrayDBExt = ["PythonCall", "CondaPkg"]
-
-    [deps.ScatterNet.weakdeps]
-    CondaPkg = "992eb4ea-22a4-4c89-a5bb-47a3300528ab"
-    PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
 
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"

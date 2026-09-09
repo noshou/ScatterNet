@@ -1,21 +1,40 @@
 """
-Scattering primitives.
+The SAXS/SANS forward model: a molecule and a `q` grid in, the orientationally
+averaged detector intensity `I_calc(q)` out. 
+# Module layout
+
+- `SphFuncs`    -   `Y_lm`, `j_l`, normalised Legendre.
+- `PartialWave` -   `compute_B_lm` (the multipole moments), plus
+                    `self_scatter` / `cross_scatter` / `partial_wave_weights`
+                    (the reductions to `S_ab(q)`).
+- `Scatterers`  -   one builder per species: `vacuo`, `excluded`, `hydration`
+                    (the last returns one `B_lm` per `SHELL_CLASSES` entry).
+- `Intensity`   -  `gram` (the `S_ab` matrix `G`), `intensity` (`vᵀ G v`),
+                    `intensity_calc` (`m·I + c`), `contrast_vector` /
+                    `contrast_matrix`, and `excluded_volume_factor` (CRYSOL's
+                    fitted excluded-volume radius `r₀`).
+- `Forward`     -   the assembled model: `species_multipoles`, `gram_matrix`,
+                    `forward_cache` and `forward`. Build the geometry-only
+                    `ForwardCache` once with `forward_cache`, then call
+                    `forward(cache, m, c, dns, ρ; r0)` per parameter set; or
+                    `forward(mol, qvals, lMax, energy; m, c, dns, ρ, r0)` for a
+                    one-off.
 
 # Background
 
-1.  For a fixed orientation, the coherent scattering amplitude of 
-    N point-like scatterers with form factors f_i(q) at positions r_i 
-    is a Fourier sum: 
+1.  For a fixed orientation, the coherent scattering amplitude of
+    N point-like scatterers with form factors f_i(q) at positions r_i
+    is a Fourier sum:
 
         `A(q) = Σ_i f_i(q) * exp(i q·r_i)`
 
-    where q is the momentum-transfer vector. In solution scattering 
-    (SAXS/SANS), molecules tumble freely, so the measured intensity 
-    is the square of this amplitude averaged over every possible orientation: 
+    where q is the momentum-transfer vector. In solution scattering
+    (SAXS/SANS), molecules tumble freely, so the measured intensity
+    is the square of this amplitude averaged over every possible orientation:
 
         `I(q) = < |A(q)|² >_orientations`
 
-    which is computationally intractible to calculate exactly for large molecules. 
+    which is computationally intractible to calculate exactly for large molecules.
 \\
 2.  We can instead expand the plane wave in spherical harmonics, since
     `exp(i q·r)` has an exact expansion (the Rayleigh expansion) in terms
@@ -36,14 +55,14 @@ Scattering primitives.
     B_lm(q) is therefore the multipole moment of degree (l,m) of the
     scattering amplitude A(q). Squaring A(q) gives:
 
-        `|A(q)|² =  (4π)² * Σ_{l,m} Σ_{l',m'} i^l*(-i)^l' 
-                    * Y_lm(q_hat) * conj(Y_l'm'(q_hat)) 
+        `|A(q)|² =  (4π)² * Σ_{l,m} Σ_{l',m'} i^l*(-i)^l'
+                    * Y_lm(q_hat) * conj(Y_l'm'(q_hat))
                     * B_lm(q) * conj(B_l'm'(q))`
 
-    Averaging over orientation means averaging over the direction q_hat. 
-    Y_lm is orthonormal on the sphere, so `∫dΩ_q_hat Y_lm(q_hat)*conj(Y_l'm'(q_hat))` 
-    is 1 when (l,m)=(l',m') and 0 otherwise, collapsing the double sum to a single sum. 
-    The surviving l=l' diagonal's  phase factor becomes `i^l*(-i)^l = (i*(-i))^l = 1^l = 1`, 
+    Averaging over orientation means averaging over the direction q_hat.
+    Y_lm is orthonormal on the sphere, so `∫dΩ_q_hat Y_lm(q_hat)*conj(Y_l'm'(q_hat))`
+    is 1 when (l,m)=(l',m') and 0 otherwise, collapsing the double sum to a single sum.
+    The surviving l=l' diagonal's  phase factor becomes `i^l*(-i)^l = (i*(-i))^l = 1^l = 1`,
     cancelling. What survives both is:
 
         `I(q) = 4π * Σ_l Σ_{m=-l}^{l} |B_lm(q)|²`
@@ -59,7 +78,7 @@ Scattering primitives.
         `Σ_{m=-l}^{l} |B_lm|² = 1·|B_l0|² + Σ_{m=1}^{l} 2·|B_lm|²`
 
     a weighting given `1`-for-`m=0` and  `2`-for-`m>0`  over the half that computed.
-    
+
     The derivation needs `f_i(q)` real. Near an absorption edge, atomic
     form factors are complex (`f = f0 + f' + i*f''`, the anomalous term),
     and the identity in (3) breaks exactly where it needed `conj(f_i) = f_i`.
@@ -70,70 +89,141 @@ Scattering primitives.
     the channels' `|B_lm|²` incoherently reproduces the exact total with
     no approximation.
 \\
-4.  A real molecule is modelled as several distinct scatterers
-    at once, which combine into one total amplitude before squaring:
+4.  A real molecule scatters as several **species** superposed at the
+    amplitude level (coherently), then squared:
 
-        `A_total(q) = A_vac(q) - A_ex(q) + A_sh(q)`
+        `A_total(q) = Σ_a c_a A_a(q)`
 
-    expanding into:
+    so, after the orientational average of (2),
 
-        `I(q)   = <|A_total(q)|²>
-                =   S_vac,vac + S_ex,ex + S_sh,sh
-                    - 2*S_vac,ex + 2*S_vac,sh - 2*S_ex,sh`
-    where: 
-        - `vac`: the real atoms in vacuo (ie: no solvent).
-        - `ex`: Gaussian excluded-volume dummies, one per atom. A negative
-                contrast correction subtracting the bulk solvent that each 
-                atom's own volume displaces.
-        - `sh`: hydration-shell dummies, one per solvent-exposed atom. A 
-                positive contrast contribution from the perturbed-density 
-                solvent layer coating the molecule's actual surface.
+        `I(q) = Σ_a Σ_b c_a c_b S_ab(q)`,
+        `S_ab(q) = 4π Σ_lm w_lm Re(B^a_lm(q) conj(B^b_lm(q)))`
 
-    A diagonal term (`S_vac,vac`, ...) is `4π * Σ_lm w_lm * |B_lm|²`, which calculates
-    the self-interaction of a scatterer. A cross term (`S_vac,ex`, ...) is
-    `4π * Σ_lm w_lm * Re(B_a * conj(B_b))` between two different scatterer's `B_lm`.
+    `S_aa` (a species against itself) is the self term `4π Σ_lm w_lm |B_lm|²`;
+    `S_ab` with `a ≠ b` is the cross term. The species:
+
+        - `vac`         molecule as if no solvent existed.
+        - `ex`          one Gaussian excluded-volume dummy per atom: the bulk
+                        solvent each atom displaces (a negative contrast).
+        - `sh_convex`  ┐ hydration-shell dummies on the solvent-accessible
+        - `sh_concave` ├ surface, split by local geometry into CRYSOL 3's
+        - `sh_cavity`  ┘ three border-layer populations (`SHELL_CLASSES`)
+
+    Classic single-shell CRYSOL is the `n = 3` reduction `(vac, ex, sh)` with
+    the three shell classes merged.
 \\
-5.  Real molecules don't perfectly fit the model described above. The baseline
-    excluded-volume and hydration-shell terms are only generalised
-    estimates (a nominal dummy-sphere density, and an assumed shell
-    thickness), not the true local electron density. Two fit parameters,
-    `dns` and `dro`, correct for that by rescaling each scatterer's amplitudes:
+5.  The dummy species do not carry the true local electron density
 
-        `A_total(q) = A_vac(q) - dns*A_ex(q) + dro*A_sh(q)`
-    
-    where:
-            - `dns`:    scaling factor for the excluded-volume term. Recales to the 
-                        true mean electron density of the displaced bulk solvent.
-            - `dro`:    the hydration shell's excess electron density over bulk
-                        solvent, since ordered/perturbed water at the surface is 
-                        denser than bulk water by an amount not known a priori.
+        `v = (1, -dns, dro_1, dro_2, dro_3)`,     dro_k = DRO_UNIT * ρ_k
 
-    This expands into:
+    - `dns` rescales `A_ex` to the mean electron density of the displaced
+            bulk solvent (`≈ 0.334 e·Å⁻³`).
+    - `ρ_k` dimensionless shell contrast per class (CRYSOL's `--dro`
+            multiple, default `(1, 1, 0)`); `dro_k` is the class's excess
+            electron density over bulk.
 
-        `I(q)   = <|A_total(q)|²>
-                =   S_vac,vac
-                    - 2*dns*S_vac,ex
-                    + 2*dro*S_vac,sh
-                    + dns^2*S_ex,ex
-                    + dro^2*S_sh,sh
-                    - 2*dns*dro*S_ex,sh`
+    With the geometry-only Gram matrix `G_ab(q) = S_ab(q)` the whole
+    expansion is the bilinear form
+
+        `I(q) = vᵀ G(q) v`,     G(q) ⪰ 0
+
+    `n(n+1)/2` distinct `S_ab(q)` curves (15 for `n = 5`, 6 for `n = 3`).
+    `G` depends only on geometry and beam; `v` only on the fit parameters, so
+    `G` is built once per structure and reused across every parameter set.
 \\
-6.  `dns`/`dro` correct the model's own approximations, but a real detector measures on 
-    an arbitrary intensity scale, and real buffer subtraction is imperfect. Two more 
-    parameters account for this:
+6.  A table of atomic radii gets the *displaced* volume wrong -- how much bulk
+    water an atom excludes depends on its chemical environment, not just its
+    element. CRYSOL's fix is one global expansion factor `c_1 = r_0/r_m` over
+    all dummies, `r_0` fitted and `r_m` the structure's mean atomic radius.
+    Expanding a dummy's radius sends `V_j -> c_1^3 V_j` in the Gaussian of (4),
+    i.e.
 
-        `I_calc(q) = m*I(q) + c`
-    
-    where:
-        - `m`:  a scaling factor to rescale the calculated (absolute) intensity to the
-                measured (arbitrary-unit) intensity.
-        - `c`:  a constant background left over from imperfect buffer subtraction.
+        `f_j(q) -> c_1^3 * f_j(q) * exp(-q^2 (c_1^2 - 1) V_j^(2/3) / 4π)`
+
+    The residual envelope still carries `V_j`, so exactly it does not leave the
+    atom sum and `B_ex` (hence `G`) would have to be rebuilt per `r_0`. CRYSOL's
+    standard approximation -- kept here -- replaces the per-atom `V_j^(2/3)` by
+    the mean-radius value `V_m^(2/3) = (4π/3)^(2/3) r_m^2`, making it one scalar
+    function of `q` that leaves the sum entirely:
+
+        `G_ex(q) = c_1^3 exp(-q^2 (c_1^2 - 1) (4π/3)^(2/3) r_m^2 / 4π)`
+
+    So `r_0` reweights the *contrast*, not the geometry: `v` simply becomes
+    `q`-dependent in its `ex` entry, and `G` stays cached.
+
+        `v(q) = (1, -dns*G_ex(q), dro_1, dro_2, dro_3)`,   `I(q) = v(q)ᵀ G(q) v(q)`
+
+    Exact at `q = 0` (total excluded volume scales by `c_1^3`) and for an atom
+    of radius `r_m`; it degrades with the spread of radii about `r_m`, which for
+    protein heavy atoms is small. `r_0 = r_m` gives `G_ex ≡ 1`, the uncorrected
+    model. Note `dns` and `r_0` are strongly degenerate -- CRYSOL fixes `dns` at
+    `0.334` and fits `r_0`.
+\\
+7.  A real detector reads an arbitrary scale over an imperfect buffer
+    subtraction, so the reported intensity is
+
+        `I_calc(q) = m * I(q) + c`
+
+    with `m` the overall scale (absolute → arbitrary units) and `c` a flat
+    background.
 """
 module Scattering
+
+using ..Interfaces: Interfaces, FormFactorSource, FormFactorSourceTables
+using ..Molecule.SASA: SASA
+
+# The public surface. `forward` is the forward model; `gram_matrix` is the
+# geometry-only pass to cache when sweeping fit parameters. Everything the
+# `include`s below bring in (`compute_B_lm`, `vacuo`/`excluded`/`hydration`,
+# `gram`/`intensity`/…) is the machinery those two compose -- reachable by
+# qualified name for tests and advanced callers, but not part of the API.
+export forward, gram_matrix, forward_cache
+
+# ---------------------------------------------------------------------------
+# Module-level configuration -- the single source of truth for every knob the
+# forward model takes. `vacuo` / `hydration` / `Intensity.jl` / `Forward.jl`
+# read these as their defaults; override per call where needed.
+# ---------------------------------------------------------------------------
+
+"""
+Hydration-shell thickness in Å: how far the perturbed-density water layer
+extends beyond the solvent-accessible surface. `3.0` is CRYSOL's border-layer
+default.
+"""
+const SHELL_THICKNESS = 3.0
+
+"Solvent probe radius in Å (water), forwarded to `SASA.shell_points`."
+const PROBE_RADIUS = 1.4
+
+"""
+Default shell-dummy budget (`hydration`'s `n_target`). `nothing` lets
+`SASA.shell_points` size the cloud from the accessible area
+(`≈ area / SASA.SHELL_AREA_PER_POINT`, floored at `SASA.SHELL_MIN_POINTS`);
+an `Int` pins it.
+"""
+const SHELL_N_TARGET::Union{Nothing,Int} = nothing
+
+"""
+CRYSOL 3's three border-layer populations, in the field order of the
+`NamedTuple` [`hydration`](@ref) returns. Each carries its own fitted contrast
+`dro_k = DRO_UNIT * ρ_k` downstream; CRYSOL's defaults are `ρ = (1, 1, 0)`.
+"""
+const SHELL_CLASSES = (SASA.CONVEX, SASA.CONCAVE, SASA.CAVITY)
+
+"Shell-contrast unit in e·Å⁻³ (CRYSOL's `--dro`); `dro_k = DRO_UNIT * ρ_k`."
+const DRO_UNIT = 0.03
+
+"Default X-ray form-factor backend (bundled Waasmaier-Kirfel + Chantler tables)."
+const FORM_FACTOR_SOURCE = FormFactorSourceTables()
+
+"Atoms/dummies per pass in `compute_B_lm`."
+const B_LM_CHUNK = UInt64(2048)
 
 include("SphFuncs.jl")
 include("PartialWave.jl")
 include("Scatterers.jl")
+include("Intensity.jl")
+include("Forward.jl")
 
 using .SphFuncs: SphFuncs
 
